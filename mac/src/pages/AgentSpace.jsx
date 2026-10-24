@@ -76,6 +76,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   const [ctrl, setCtrl] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [revealDoneId, setRevealDoneId] = useState(null);
+  const [revealInstant, setRevealInstant] = useState(false);
   const [confetti, setConfetti] = useState(null);
   const doneRef = useRef(null);
   const composerRef = useRef(null);
@@ -143,6 +144,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     const c = new AbortController();
     setActiveId(id);
     setRevealDoneId(null);
+    setRevealInstant(false);
     doneRef.current = null;
     setCtrl(c);
     setRunning(true);
@@ -184,6 +186,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   // Stable wrappers so memoized messages/composer don't re-render on every store update
   const sendStable = useLatest(send);
   const stopStable = useLatest(() => ctrl?.abort());
+  const skipRevealStable = useLatest(() => setRevealInstant(true));
   const branchStable = useLatest((i) => branch(i));
   const editStable = useLatest((msgId, v) => {
     const i = msgsRef.current.findIndex((m) => m.id === msgId);
@@ -219,9 +222,10 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
                 key={m.id}
                 msg={m}
                 agent={agent}
-                wps={wps}
+                wps={revealInstant ? 0 : wps}
                 index={i}
                 live={m.id === activeId && liveAnim}
+                onSkipReveal={skipRevealStable}
                 onRevealDone={revealDone}
                 shimmer={m.id === activeId ? fx.impact : null}
                 gemPulse={m.id === activeId && liveAnim && fx.pulse.length ? fx.pulse : null}
@@ -330,6 +334,16 @@ export default function AgentSpace() {
           </div>
         </div>
         <ModelSwitch agent={agent} />
+        <button
+          onClick={toggleFullscreen}
+          data-click
+          data-testid="toggle-fullscreen"
+          className="btn-icon h-9 w-9 shrink-0 text-dim hover:text-fg"
+          title={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          aria-label={fullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+        >
+          {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
       </header>
       <div className="flex min-h-0 flex-1">
         <AnimatePresence initial={false}>

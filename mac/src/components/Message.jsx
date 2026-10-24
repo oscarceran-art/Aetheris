@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, AlertTriangle, RotateCcw, Pencil, GitBranch, Volume2, Square, FileText, Paperclip } from "lucide-react";
+import { Copy, AlertTriangle, RotateCcw, Pencil, GitBranch, Volume2, Square, FileText, Paperclip, FastForward } from "lucide-react";
 import { toast } from "sonner";
 import { AgentAvatar, useCycle } from "./AgentAvatar";
 import { Markdown } from "./Markdown";
@@ -107,7 +107,7 @@ const speak = (text, setSpeaking) => {
   setSpeaking(true);
 };
 
-export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, live = false, onRevealDone, index, onRegenerate, showRegenerate, onBranch }) => {
+export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, live = false, onSkipReveal, onRevealDone, index, onRegenerate, showRegenerate, onBranch }) => {
   const { text, revealing } = useReveal(msg.content, msg.streaming, wps);
   // Word fade length follows the Reply speed setting; Instant mode (wps=0) = no fade
   const fwDur = wps ? `${fwSeconds(wps).toFixed(2)}s` : "0s";
@@ -157,6 +157,18 @@ export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, liv
               <Act icon={GitBranch} onClick={() => onBranch(index)} testid={`branch-reply-${msg.id}`} title="Branch from here" />
               {showRegenerate && <Act icon={RotateCcw} onClick={onRegenerate} testid={`regenerate-message-${msg.id}`} title="Regenerate" />}
             </div>
+          )}
+          {live && wps > 0 && (
+            <button
+              onClick={onSkipReveal}
+              data-click
+              data-testid={`skip-reveal-${msg.id}`}
+              title="Show this reply instantly"
+              aria-label="Show this reply instantly"
+              className={`${msg.streaming ? "ml-auto" : ""} inline-flex items-center gap-1 rounded-full border border-[color:var(--line)] px-2 py-1 text-[11px] text-dim transition-colors hover:text-fg`}
+            >
+              <FastForward className="h-3 w-3" /> Show instantly
+            </button>
           )}
         </div>
         <div ref={replyRef} className={`reply text-[15px] leading-relaxed ${tint ? "gem-pulse" : ""}`} style={{ "--fw-dur": fwDur, ...(tint ? { "--tint": tint } : {}) }} data-testid={`reply-text-${msg.id}`}>
