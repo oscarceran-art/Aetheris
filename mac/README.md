@@ -2,12 +2,7 @@
 
 A local-first multi-agent chat app. Runs entirely in your browser — your API key and all data stay on your device (localStorage). No backend.
 
-This is the **macOS build** and the only maintained version. The Windows build at the repository root is frozen — it
-will not receive updates and will not be updated on GitHub. Only the launcher scripts and these notes differ
-(`Start Aetheris.command` instead of `Start Aetheris.bat`); in the repo this folder is `mac/`.
-
-> **Maintenance:** the `mac/` build is the only actively maintained version. The Windows build in the repository root is
-> frozen — it will not receive updates and will not be updated on GitHub.
+This is the **macOS app** and the only supported version of Aetheris.
 
 ## Requirements
 
@@ -19,7 +14,7 @@ will not receive updates and will not be updated on GitHub. Only the launcher sc
 
 **macOS — double-click `Start Aetheris.command`.** It installs dependencies on the first run, starts the dev server, and opens http://localhost:5173 in Chrome once it is ready. Keep the Terminal window open; press `Ctrl+C` in it (or close it) to stop the server.
 
-**First time only** — Windows and zip downloads don't carry the executable bit, so make the launcher executable once. Open Terminal in this folder and run:
+**First time only** — make the launcher executable. Open Terminal in this folder and run:
 
 ```bash
 chmod +x "Start Aetheris.command" scripts/open-browser.sh

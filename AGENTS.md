@@ -4,20 +4,9 @@ This repository contains two separate builds of Aetheris:
 
 | Path | Platform | Status |
 | --- | --- | --- |
-| `mac/` | macOS | **Active — the only maintained build** |
-| repository root | Windows | **Frozen — do not modify** |
+| `mac/` | macOS | **Active — the maintained build** |
+| repository root | Windows |
 
-## Hard rules
-
-1. **Never modify the non-macOS build.** That means everything outside `mac/`: `src/`, `index.html`,
-   `vite.config.js`, `scripts/`, `package.json`, `package-lock.json`, `Start Aetheris.bat`, and the root
-   `README.md` (its frozen notice is the only exception).
-2. Make every app change inside `mac/`.
-3. The Windows/root build is **not published or updated on GitHub**. Do not prepare, commit, or push updates,
-   fixes, or documentation for it.
-4. Do not "sync" or copy changes from `mac/` into the root build.
-5. `.env` and `.mcp.json` hold secrets and are gitignored. Never commit them, print their values, or copy them
-   into docs.
 
 ## Working in `mac/`
 
