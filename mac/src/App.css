@@ -430,3 +430,75 @@
 @keyframes logo-spin { to { rotate: 360deg; } }
 .confetti { position: absolute; width: 7px; height: 11px; border-radius: 2px; animation: confetti 1.25s cubic-bezier(0.15, 0.7, 0.3, 1) forwards; }
 @keyframes confetti { from { transform: translate(0, 0) rotate(0) scale(0.4); opacity: 1; } to { transform: translate(var(--dx), calc(var(--dy) + 60px)) rotate(var(--r)) scale(1); opacity: 0; } }
+
+/* ---------- Agent Galaxy ---------- */
+.galaxy-live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: #67e8c0;
+  box-shadow: 0 0 10px #67e8c0; animation: twinkle 1.8s ease-in-out infinite alternate;
+}
+.galaxy-stage {
+  position: relative; container-type: inline-size; height: clamp(470px, 65vh, 650px); min-height: 470px;
+  overflow: hidden; isolation: isolate; border-radius: 30px;
+  border: 1px solid rgba(167, 180, 255, 0.13);
+  background: radial-gradient(ellipse at 50% 47%, #10152b 0%, #090d1d 45%, #070916 100%);
+  box-shadow: inset 0 0 90px rgba(31, 39, 89, 0.24), 0 24px 70px -42px rgba(44, 49, 131, 0.7);
+}
+.galaxy-stage::before, .galaxy-stage::after {
+  content: ""; position: absolute; z-index: -1; border-radius: 50%; pointer-events: none;
+}
+.galaxy-stage::before { inset: 8%; border: 1px solid rgba(163, 181, 255, 0.035); }
+.galaxy-stage::after { inset: 17%; border: 1px solid rgba(163, 181, 255, 0.035); }
+.galaxy-nebula { position: absolute; z-index: -1; width: 52%; aspect-ratio: 1; border-radius: 50%; filter: blur(42px); opacity: 0.12; pointer-events: none; }
+.galaxy-nebula-a { left: -16%; top: 0; background: #287dff; }
+.galaxy-nebula-b { right: -17%; bottom: -28%; background: #a12fff; opacity: 0.1; }
+.galaxy-stars { position: absolute; inset: 0; pointer-events: none; }
+.galaxy-stars i { position: absolute; border-radius: 50%; background: #dce7ff; box-shadow: 0 0 5px rgba(213, 226, 255, 0.75); animation: galaxy-twinkle 3.4s ease-in-out infinite alternate; }
+@keyframes galaxy-twinkle { from { scale: 0.65; } to { scale: 1.35; } }
+.galaxy-path {
+  position: absolute; top: 50%; left: 50%; translate: -50% -50%; width: min(calc(210px + var(--ring) * 85px), calc(100cqi - 126px)); height: min(calc(210px + var(--ring) * 85px), calc(100cqi - 126px));
+  border-radius: 50%;
+  animation: galaxy-orbit var(--orbit-duration) linear infinite; animation-delay: var(--orbit-delay);
+}
+.galaxy-path::before { content: ""; position: absolute; inset: 0; border: 1px solid rgba(170, 188, 255, 0.12); border-radius: 50%; box-shadow: 0 0 24px rgba(108, 124, 255, 0.035), inset 0 0 24px rgba(108, 124, 255, 0.025); }
+@keyframes galaxy-orbit { from { transform: rotate(var(--phase)); } to { transform: rotate(calc(var(--phase) + 1turn)); } }
+.galaxy-world {
+  position: absolute; top: 0; left: 50%; display: flex; min-width: 92px; flex-direction: column; align-items: center;
+  flex-direction: column-reverse; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer;
+  transform: translate(-50%, -50%); animation: galaxy-counter-orbit var(--orbit-duration) linear infinite; animation-delay: var(--orbit-delay);
+}
+@keyframes galaxy-counter-orbit { from { rotate: 0deg; } to { rotate: -1turn; } }
+.galaxy-planet-wrap { position: relative; display: block; padding: 5px; border-radius: 50%; background: rgba(9, 13, 29, 0.86); box-shadow: 0 0 0 1px rgba(197, 210, 255, 0.2), 0 0 24px color-mix(in srgb, var(--glow, #8b5cf6) 28%, transparent); transition: box-shadow 0.25s ease, scale 0.25s ease; }
+.galaxy-world:hover .galaxy-planet-wrap, .galaxy-world:focus-visible .galaxy-planet-wrap { scale: 1.16; box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 32px color-mix(in srgb, var(--glow, #8b5cf6) 60%, transparent); }
+.galaxy-world:focus-visible { outline: none; }
+.galaxy-world .orb-av { --c1: var(--galaxy-agent-color, #8b5cf6); }
+.galaxy-planet-gem { position: absolute; right: -2px; bottom: 0; display: grid; width: 21px; height: 21px; place-items: center; border: 1px solid rgba(255,255,255,.55); border-radius: 50%; background: #0c1020; box-shadow: 0 0 13px color-mix(in srgb, var(--gem-color) 75%, transparent); }
+.galaxy-name { max-width: 126px; margin-top: 5px; overflow: hidden; color: #f4f5ff; font-family: var(--font-display); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 10px #070916, 0 0 14px #070916; }
+.galaxy-role { max-width: 130px; overflow: hidden; color: #a7aec7; font-family: var(--font-mono); font-size: 8px; letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; text-shadow: 0 1px 8px #070916, 0 0 12px #070916; }
+.galaxy-gem-label { display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; border: 1px solid rgba(255,255,255,.13); border-radius: 999px; background: rgba(8, 11, 24, .84); padding: 2px 6px; color: #e8e9f4; font-family: var(--font-mono); font-size: 9px; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
+.galaxy-sun { position: absolute; top: 50%; left: 50%; display: grid; width: 114px; height: 114px; place-items: center; transform: translate(-50%, -50%); }
+.galaxy-sun-aura { position: absolute; inset: -42%; border-radius: 50%; background: radial-gradient(circle, rgba(103, 121, 255, .23), rgba(115, 75, 255, .1) 35%, transparent 69%); animation: galaxy-sun-breathe 5s ease-in-out infinite; }
+@keyframes galaxy-sun-breathe { 50% { scale: 1.16; opacity: .68; } }
+.galaxy-sun-core { position: relative; display: grid; width: 76px; height: 76px; place-items: center; border: 1px solid rgba(219, 226, 255, .34); border-radius: 50%; background: radial-gradient(circle at 34% 25%, #353b73, #11152e 66%); box-shadow: 0 0 24px rgba(125, 115, 255, .28), inset 0 0 22px rgba(175, 176, 255, .14); }
+.galaxy-sun-core .logo-orb { width: 34px; height: 34px; }
+.galaxy-sun-label { position: absolute; top: calc(100% + 2px); color: #b9c0e5; font-family: var(--font-mono); font-size: 8px; letter-spacing: .23em; text-shadow: 0 1px 8px #070916; }
+.galaxy-coordinates { position: absolute; right: 18px; bottom: 15px; color: rgba(186, 198, 237, .52); font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; }
+.galaxy-coordinates span { padding: 0 5px; color: #7986d4; }
+.galaxy-empty { position: absolute; z-index: 5; top: 50%; left: 50%; width: min(320px, 80%); transform: translate(-50%, -50%); border: 1px solid rgba(197, 210, 255, .18); border-radius: 24px; background: rgba(12, 16, 34, .92); padding: 28px 22px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.galaxy-signal { border: 1px solid color-mix(in srgb, var(--signal-color) 18%, var(--line)); background: color-mix(in srgb, var(--signal-color) 4%, var(--glass-bg)); transition: border-color .2s ease, background-color .2s ease, transform .2s ease; }
+.galaxy-signal:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--signal-color) 48%, var(--line)); background: color-mix(in srgb, var(--signal-color) 9%, var(--glass-bg)); }
+.galaxy-signal-empty { border: 1px dashed var(--line); background: color-mix(in srgb, var(--glass-bg) 70%, transparent); }
+@media (max-width: 639px) {
+  .galaxy-stage { height: 450px; min-height: 450px; border-radius: 23px; }
+  .galaxy-path { width: min(calc(136px + var(--ring) * 22px), calc(100cqi - 126px)); height: min(calc(136px + var(--ring) * 22px), calc(100cqi - 126px)); }
+  .galaxy-planet-wrap { padding: 3px; }
+  .galaxy-planet-wrap .orb-av { width: 38px !important; height: 38px !important; --s: 38px !important; }
+  .galaxy-planet-gem { width: 18px; height: 18px; }
+  .galaxy-name { max-width: 88px; font-size: 11px; }
+  .galaxy-role { max-width: 94px; font-size: 7px; }
+  .galaxy-sun { scale: .82; }
+  .galaxy-coordinates { right: 10px; bottom: 10px; font-size: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .galaxy-path, .galaxy-world, .galaxy-live-dot, .galaxy-stars i, .galaxy-sun-aura { animation: none !important; }
+  .galaxy-path { transform: rotate(var(--phase)); }
+}

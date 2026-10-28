@@ -4,7 +4,7 @@ A local-first multi-agent chat app. Runs entirely in your browser — your API k
 
 This is the **macOS app** and the only supported version of Aetheris.
 
-**Current development milestone:** v0.7.0 · about 70% toward v1.0. See the [GitHub releases](https://github.com/oscarceran-art/Aetheris/releases) for versioned milestones.
+**Current development milestone:** v0.8.0 · about 80% toward v1.0. See the [GitHub releases](https://github.com/oscarceran-art/Aetheris/releases) for versioned milestones.
 
 ## Requirements
 

@@ -1,10 +1,11 @@
 import { NavLink, matchPath, useLocation, useNavigate } from "react-router-dom";
-import { Bot, Gem, Settings, Moon, Sun, KeyRound, PanelLeftClose, PanelLeftOpen, EyeOff, Search, Volume2, VolumeX, Keyboard, MessageSquare, Home, CalendarCheck } from "lucide-react";
+import { Bot, Gem, Settings, Moon, Sun, KeyRound, PanelLeftClose, PanelLeftOpen, EyeOff, Search, Volume2, VolumeX, Keyboard, MessageSquare, Home, CalendarCheck, Orbit } from "lucide-react";
 import { useStore } from "../lib/store";
 import { AgentAvatar } from "./AgentAvatar";
 
 export const NAV = [
   { to: "/", label: "Home", icon: Home, id: "home", end: true },
+  { to: "/galaxy", label: "The Galaxy", icon: Orbit, id: "galaxy" },
   { to: "/agents", label: "Agent studio", icon: Bot, id: "agents" },
   { to: "/gems", label: "Gems", icon: Gem, id: "gems" },
   { to: "/todo", label: "To-do", icon: CalendarCheck, id: "todo" },

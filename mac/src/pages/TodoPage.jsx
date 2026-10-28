@@ -23,7 +23,7 @@ const newItem = (due = "") => ({
 });
 
 const TaskForm = ({ item, onChange, onSave, onCancel, titleTestid, prefix, saveLabel }) => (
-  <div className="glass-card rounded-3xl p-5 sm:p-6" data-testid={`${prefix}-form`}>
+  <div className="glass-card rounded-3xl p-5 sm:p-7" data-testid={`${prefix}-form`}>
     <input
       autoFocus
       value={item.title}
@@ -78,7 +78,8 @@ const monthGrid = (month) => {
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const mondayOffset = (first.getDay() + 6) % 7;
   const start = new Date(month.getFullYear(), month.getMonth(), 1 - mondayOffset);
-  return Array.from({ length: 42 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+  const rows = Math.ceil((mondayOffset + new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()) / 7);
+  return Array.from({ length: rows * 7 }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
 };
 
 export default function TodoPage() {
@@ -168,10 +169,10 @@ export default function TodoPage() {
       <PageHeader eyebrow="Your planner" title="Tasks & calendar">
         <button data-click onClick={add} className="btn-solid btn-accent" data-testid="todo-add"><Plus className="h-4 w-4" /> Add task</button>
       </PageHeader>
-      <div className="mx-auto max-w-7xl space-y-6 px-5 pb-16 sm:px-8 lg:px-12">
+      <div className="mx-auto max-w-7xl space-y-8 px-5 pb-16 sm:px-8 lg:px-12">
         <p className="-mt-3 max-w-2xl text-sm leading-relaxed text-dim">A calm place to see what’s coming up, capture a task, and keep your week moving.</p>
 
-        <section className="grid grid-cols-2 gap-3 xl:grid-cols-4" aria-label="Task overview">
+        <section className="todo-stats-grid" aria-label="Task overview">
           {[
             { id: "active", label: "Open tasks", value: stats.open, tint: "text-accent" },
             { id: "today", label: "Due today", value: stats.today, tint: "text-sky-400" },
@@ -189,7 +190,7 @@ export default function TodoPage() {
                   setFilter(stat.id);
                 }
               }}
-              className="glass-card rounded-2xl px-4 py-3 text-left transition-transform hover:-translate-y-0.5 sm:px-5 sm:py-4"
+              className="todo-stat-card glass-card rounded-2xl px-4 py-3 text-left transition-transform hover:-translate-y-0.5 sm:px-5 sm:py-4"
               data-testid={`todo-stat-${stat.id}`}
             >
               <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-dim sm:text-[10px]">{stat.label}</span>
@@ -200,15 +201,15 @@ export default function TodoPage() {
 
         {draft && <TaskForm item={draft} onChange={setDraft} onSave={saveDraft} onCancel={() => setDraft(null)} titleTestid="todo-draft-title" prefix="todo-draft" saveLabel="Add task" />}
 
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.85fr)]">
-          <section className="glass-card min-w-0 rounded-[28px] p-4 sm:p-6" data-testid="todo-calendar">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
+        <div className="todo-workspace-layout items-start">
+          <section className="glass-card min-w-0 rounded-[28px] p-5 sm:p-7" data-testid="todo-calendar">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+              <div className="min-w-0">
                 <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-accent">Monthly view</div>
                 <h2 className="todo-month-title mt-1 font-display text-xl font-semibold text-fg sm:text-2xl">{monthLabel}</h2>
                 <p className="mt-1 text-xs text-dim">{monthTasks.length} scheduled {monthTasks.length === 1 ? "task" : "tasks"}</p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="ml-auto flex shrink-0 items-center gap-1.5">
                 <button onClick={goToday} className="btn-ghost px-3 py-2 text-xs" data-testid="calendar-today">Today</button>
                 <button onClick={() => changeMonth(-1)} className="btn-icon h-9 w-9 text-dim hover:text-fg" title="Previous month" aria-label="Previous month" data-testid="calendar-prev"><ChevronLeft className="h-4 w-4" /></button>
                 <button onClick={() => changeMonth(1)} className="btn-icon h-9 w-9 text-dim hover:text-fg" title="Next month" aria-label="Next month" data-testid="calendar-next"><ChevronRight className="h-4 w-4" /></button>
@@ -255,7 +256,7 @@ export default function TodoPage() {
             </div>
           </section>
 
-          <section className="glass-card min-w-0 rounded-[28px] p-4 sm:p-6" data-testid="todo-agenda">
+          <section className="glass-card min-w-0 rounded-[28px] p-5 sm:p-7" data-testid="todo-agenda">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-mono text-[9px] uppercase tracking-[0.22em] text-accent">{view === "all" ? "Your tasks" : "Day agenda"}</div>
@@ -281,7 +282,7 @@ export default function TodoPage() {
 
             <div className="mt-4 space-y-2">
               {visibleTasks.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-[color:var(--line)] px-4 py-10 text-center" data-testid="todo-empty">
+                <div className="todo-empty-state rounded-2xl border border-dashed border-[color:var(--line)] px-4 text-center" data-testid="todo-empty">
                   <CalendarDays className="mx-auto h-6 w-6 text-dim" />
                   <p className="mt-3 text-sm text-fg">{view === "day" ? "Nothing planned for this day." : filter === "done" ? "Nothing completed yet." : "No tasks match this view."}</p>
                   <p className="mt-1 text-xs text-dim">Add a task here or choose another date on the calendar.</p>

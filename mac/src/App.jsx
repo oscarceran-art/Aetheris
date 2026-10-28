@@ -9,6 +9,7 @@ import GemsPage from "./pages/GemsPage";
 import TodoPage from "./pages/TodoPage";
 import SettingsPage from "./pages/SettingsPage";
 import HomePage from "./pages/HomePage";
+import GalaxyPage from "./pages/GalaxyPage";
 
 const ThemedToaster = () => {
   const { state } = useStore();
@@ -22,6 +23,7 @@ function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
+            <Route path="galaxy" element={<GalaxyPage />} />
             <Route path="agent/:agentId" element={<AgentSpace />} />
             <Route path="agent/:agentId/chat/:convId" element={<AgentSpace />} />
             <Route path="agents" element={<AgentsPage />} />
