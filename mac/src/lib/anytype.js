@@ -19,11 +19,13 @@ export const ANYTYPE_DEFAULT_BASE = "/anytype";
 
 const baseOf = (cfg) => String(cfg?.base || ANYTYPE_DEFAULT_BASE).replace(/\/+$/, "");
 
-// Anything that needs the desktop app + a key
-export const anytypeReady = (cfg) => !!(cfg?.enabled && cfg?.apiKey);
+// Connected means the API key is ready; ready additionally requires an explicit
+// space so tools are never offered with an implicit or guessed default.
+export const anytypeConnected = (cfg) => !!(cfg?.enabled && cfg?.apiKey);
+export const anytypeReady = (cfg) => !!(anytypeConnected(cfg) && cfg?.spaceId);
 
-// An agent can pin its own Anytype space; otherwise the one chosen in Settings
-// acts as the default.
+// An agent can pin its own Anytype space; otherwise the optional Settings
+// default is used. No selected space means no Anytype access/tools.
 export const anytypeFor = (cfg, agent) =>
   agent?.anytypeSpace
     ? { ...cfg, spaceId: agent.anytypeSpace, spaceName: agent.anytypeSpaceName || agent.anytypeSpace }

@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { completeChat, streamChat } from "./openai";
+import { addUsage, normalizeUsage } from "./cost";
 import { ANYTYPE_TOOLS, anytypeReady, anytypeSystem, runAnytypeTool, toolLabel } from "./anytype";
 import { WEB_TOOLS, isWebTool, runWebTool, webReady, webSystem, webToolLabel } from "./websearch";
 import { isMcpTool, mcpChatTools, mcpToolLabel } from "./mcp";
@@ -15,7 +16,7 @@ const MAX_TOOL_ROUNDS = 6;
 // a few times, then replies. The final text
 // isn't streamed — the UI fades it in word by word anyway.
 async function withTools({ apiKey, agent, system, messages, anytype, web, mcp, onUpdate, signal }) {
-  const tools = [...ANYTYPE_TOOLS, ...(webReady(web) ? WEB_TOOLS : []), ...mcp.tools];
+  const tools = [...(anytypeReady(anytype) ? ANYTYPE_TOOLS : []), ...(webReady(web) ? WEB_TOOLS : []), ...mcp.tools];
   const label = (name, args) =>
     isMcpTool(name) ? mcpToolLabel(name) : isWebTool(name) ? webToolLabel(name, args) : toolLabel(name, args);
   const convo = [
@@ -27,11 +28,14 @@ async function withTools({ apiKey, agent, system, messages, anytype, web, mcp, o
     },
     ...messages,
   ];
+  let usage = null;
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const msg = await completeChat({ apiKey, model: agent.model, temperature: agent.temperature, messages: convo, tools, signal });
+    usage = addUsage(usage, msg.usage);
     const calls = msg.tool_calls || [];
-    if (!calls.length) return msg.content || "";
-    convo.push(msg);
+    if (!calls.length) return { text: msg.content || "", usage };
+    const { usage: _usage, ...assistantMessage } = msg;
+    convo.push(assistantMessage);
     for (const call of calls) {
       let args = {};
       try {
@@ -56,7 +60,8 @@ async function withTools({ apiKey, agent, system, messages, anytype, web, mcp, o
     }
   }
   const last = await completeChat({ apiKey, model: agent.model, messages: convo, signal });
-  return last.content || "";
+  usage = addUsage(usage, last.usage);
+  return { text: last.content || "", usage };
 }
 
 // One line telling the model what's connected — the tool schemas already
@@ -74,8 +79,8 @@ export async function streamInto({ apiKey, agent, messages, system, anytype, web
   if (anytypeReady(anytype) || webReady(web) || mcp.tools.length) {
     try {
       const text = await withTools({ apiKey, agent, system, messages, anytype, web, mcp, onUpdate, signal });
-      onUpdate({ content: text, streaming: false, toolStatus: null });
-      return text;
+      onUpdate({ content: text.text, streaming: false, toolStatus: null });
+      return { ...text, usage: normalizeUsage(text.usage) };
     } catch (e) {
       const aborted = e.name === "AbortError";
       onUpdate({ streaming: false, toolStatus: null, ...(aborted ? {} : { error: e.message }) });
@@ -86,6 +91,7 @@ export async function streamInto({ apiKey, agent, messages, system, anytype, web
 
   let pending = null;
   let timer = null;
+  let usage = null;
   const flush = () => {
     timer = null;
     if (pending != null) {
@@ -106,6 +112,7 @@ export async function streamInto({ apiKey, agent, messages, system, anytype, web
       temperature: agent.temperature,
       messages: [{ role: "system", content: [agent.persona, system].filter(Boolean).join("\n\n") }, ...messages],
       signal,
+      onUsage: (u) => { usage = normalizeUsage(u); },
       onToken: (t) => {
         pending = t;
         if (timer == null) timer = setTimeout(flush, FLUSH_MS);
@@ -113,7 +120,7 @@ export async function streamInto({ apiKey, agent, messages, system, anytype, web
     });
     drain();
     onUpdate({ content: text, streaming: false });
-    return text;
+    return { text, usage };
   } catch (e) {
     drain();
     const aborted = e.name === "AbortError";

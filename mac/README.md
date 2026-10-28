@@ -4,6 +4,8 @@ A local-first multi-agent chat app. Runs entirely in your browser — your API k
 
 This is the **macOS app** and the only supported version of Aetheris.
 
+**Current development milestone:** v0.7.0 · about 70% toward v1.0. See the [GitHub releases](https://github.com/oscarceran-art/Aetheris/releases) for versioned milestones.
+
 ## Requirements
 
 - macOS 12 or newer (Apple Silicon or Intel)
@@ -61,7 +63,7 @@ Agents can search, read, create and update objects in your local [Anytype](https
 
 1. Open the Anytype desktop app and create a key under **Settings → API Keys → Create new**.
 2. In Aetheris, go to **Settings → Anytype**, paste the key and press **Connect**.
-3. Pick the **default space**, then choose whether agents may write. Any agent can override that space in **Agent studio → Edit agent → Anytype space**.
+3. Optionally choose a **default space** in Settings; no space is selected automatically. Agents can select their own space in **Agent studio → Edit agent → Anytype space**. Turn off Anytype tools in Settings to keep their tool definitions out of prompts.
 4. That's it — ask an agent *"search my Anytype for the project plan and summarise it"* or *"save this answer to Anytype as a page called …"*.
 
 How it works: Anytype's REST API only listens on `127.0.0.1:31009` and deliberately sends no CORS headers, so the browser can't call it directly. The dev server proxies `/anytype/*` to it (`vite.config.js`) and stamps a loopback `Origin` header, which is what Anytype's origin gate requires for browser-originated requests. Aetheris talks to the **v2** API: current Anytype releases issue *space-scoped* keys (a grant over one or more spaces) and `/v1` refuses those by design, while v2 accepts them. Reads use `?format=md`, creates send `{name, markdown, type}`, and updates are sent as ordered ops (`set_properties` to rename, `insert_blocks` to add text, `delete_block` to rewrite the body).

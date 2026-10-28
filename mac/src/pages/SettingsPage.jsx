@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, KeyRound, RefreshCw, Download, Upload, Trash2, Moon, Sun, ShieldCheck, Gauge, Volume2, Notebook, HardDrive, Save, FolderInput, X, Globe, Plus, Plug, Pencil, Puzzle } from "lucide-react";
+import { Eye, EyeOff, KeyRound, RefreshCw, Download, Upload, Trash2, Moon, Sun, ShieldCheck, Gauge, Volume2, Notebook, HardDrive, Save, FolderInput, X, Globe, Plus, Plug, Pencil, Puzzle, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "../lib/store";
 import { listModels } from "../lib/openai";
@@ -133,8 +133,8 @@ const AnytypeCard = () => {
     try {
       const list = await listSpaces({ ...at, apiKey: k });
       setSpaces(list);
-      const keep = list.find((s) => s.id === at.spaceId) || list[0] || null;
-      patch({ apiKey: k, enabled: true, spaceId: keep?.id || "", spaceName: keep?.name || "" });
+      const keep = at.spaceExplicit ? list.find((s) => s.id === at.spaceId) || null : null;
+      patch({ apiKey: k, enabled: true, spaceId: keep?.id || "", spaceName: keep?.name || "", spaceExplicit: !!keep });
       toast.success(list.length ? `Connected · ${list.length} space${list.length === 1 ? "" : "s"}` : "Connected — that account has no spaces yet");
     } catch (e) {
       toast.error(e.message);
@@ -145,7 +145,7 @@ const AnytypeCard = () => {
   return (
     <Card title="Anytype" icon={Notebook} i={5}>
       <p className="mb-4 text-sm text-dim">
-        Lets agents read and write your local Anytype vault. Anytype's API only listens on this machine, so requests are proxied by the dev server — keep the Anytype desktop app running and create a key in <span className="text-fg">Anytype → Settings → API Keys</span>.
+        Lets agents read and write your local Anytype vault. Turn tools off to keep their definitions out of model requests. Anytype's API only listens on this machine, so requests are proxied by the dev server — keep the desktop app running and create a key in <span className="text-fg">Anytype → Settings → API Keys</span>.
       </p>
       <div className="flex gap-2">
         <div className="field flex flex-1 items-center rounded-2xl pr-2">
@@ -166,18 +166,19 @@ const AnytypeCard = () => {
 
       {at.apiKey && (
         <div className="mt-4 space-y-1">
-          <Row label="Agent access to Anytype">
+          <Row label="Enable Anytype tools">
             <Switch checked={at.enabled} onCheckedChange={(v) => patch({ enabled: v })} data-testid="anytype-enable-switch" />
           </Row>
           <Row label="Allow agents to create & edit objects">
             <Switch checked={at.write} onCheckedChange={(v) => patch({ write: v })} data-testid="anytype-write-switch" />
           </Row>
           <div className="flex items-center justify-between gap-6 py-2">
-            <span className="text-sm text-fg">Default space <span className="text-dim">· agents can override</span></span>
+            <span className="text-sm text-fg">Default space <span className="text-dim">· optional</span></span>
             {options.length ? (
-              <Select value={at.spaceId || options[0].id} onValueChange={(id) => { const s = options.find((x) => x.id === id); patch({ spaceId: id, spaceName: s?.name || "" }); }}>
+              <Select value={at.spaceId || "__none"} onValueChange={(id) => { const s = options.find((x) => x.id === id); patch({ spaceId: id === "__none" ? "" : id, spaceName: s?.name || "", spaceExplicit: id !== "__none" }); }}>
                 <SelectTrigger className="field w-56 rounded-xl text-xs" data-testid="anytype-space-select"><SelectValue /></SelectTrigger>
                 <SelectContent className="glass-menu max-h-72">
+                  <SelectItem value="__none">No default space</SelectItem>
                   {options.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -191,10 +192,10 @@ const AnytypeCard = () => {
       <div className="mt-4 flex items-center justify-between text-xs">
         <span className="flex items-center gap-2 text-dim" data-testid="anytype-status">
           <span className={`h-2 w-2 rounded-full ${at.enabled && at.apiKey && at.spaceId ? "bg-emerald-400" : at.apiKey ? "bg-amber-400" : "bg-slate-500"}`} />
-          {!at.apiKey ? "Not connected" : at.enabled && at.spaceId ? `Connected · ${at.spaceName || "space selected"}${at.write ? " · read & write" : " · read only"}` : "Key saved — connect to pick a space"}
+          {!at.apiKey ? "Not connected" : !at.enabled ? "Key saved · Anytype tools off" : at.spaceId ? `Connected · ${at.spaceName || "space selected"}${at.write ? " · read & write" : " · read only"}` : "Connected · no default space selected"}
         </span>
         {at.apiKey && (
-          <button onClick={() => { patch({ apiKey: "", spaceId: "", spaceName: "", enabled: false }); setKey(""); setSpaces([]); toast("Anytype disconnected"); }} className="text-dim hover:text-red-400" data-testid="anytype-remove-button">Disconnect</button>
+          <button onClick={() => { patch({ apiKey: "", spaceId: "", spaceName: "", spaceExplicit: false, enabled: false }); setKey(""); setSpaces([]); toast("Anytype disconnected"); }} className="text-dim hover:text-red-400" data-testid="anytype-remove-button">Disconnect</button>
         )}
       </div>
     </Card>
@@ -235,6 +236,57 @@ const WebCard = () => {
           {busy ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />} Test a search
         </button>
       </div>
+    </Card>
+  );
+};
+
+const ContextCard = () => {
+  const { state, setSettings } = useStore();
+  const context = { mode: "messages", maxMessages: 40, maxTokens: 16000, overflow: "summarize", ...state.settings.context };
+  const patch = (p) => setSettings({ context: { ...context, ...p } });
+  const messagesMode = context.mode !== "tokens";
+  const value = messagesMode ? context.maxMessages : context.maxTokens;
+  const min = messagesMode ? 1 : 1000;
+  const max = messagesMode ? 500 : 900000;
+
+  return (
+    <Card title="Conversation context" icon={MessageSquare} i={7}>
+      <p className="mb-3 text-sm text-dim">
+        Choose how much recent chat history is sent with each prompt. Older messages remain in the transcript on this device, and the newest message is always kept. Token limits are approximate (about 4 characters per token); system prompts and tools use additional context.
+      </p>
+      <Row label="Limit by">
+        <Select value={context.mode} onValueChange={(mode) => patch({ mode })}>
+          <SelectTrigger className="field w-52 rounded-xl text-xs" data-testid="context-mode-select"><SelectValue /></SelectTrigger>
+          <SelectContent className="glass-menu">
+            <SelectItem value="messages">Number of messages</SelectItem>
+            <SelectItem value="tokens">Approximate tokens</SelectItem>
+          </SelectContent>
+        </Select>
+      </Row>
+      <Row label={messagesMode ? "Recent messages to keep" : "Approximate history token limit"}>
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={messagesMode ? 1 : 1000}
+          value={value}
+          onChange={(e) => patch({ [messagesMode ? "maxMessages" : "maxTokens"]: Math.max(min, Math.min(max, Number(e.target.value) || min)) })}
+          className="field w-32 rounded-xl px-3 py-2 text-right font-mono text-xs"
+          data-testid="context-limit-input"
+        />
+      </Row>
+      <Row label="When history reaches the limit">
+        <Select value={context.overflow} onValueChange={(overflow) => patch({ overflow })}>
+          <SelectTrigger className="field w-52 rounded-xl text-xs" data-testid="context-overflow-select"><SelectValue /></SelectTrigger>
+          <SelectContent className="glass-menu">
+            <SelectItem value="summarize">Summarize older messages</SelectItem>
+            <SelectItem value="forget">Leave older messages out</SelectItem>
+          </SelectContent>
+        </Select>
+      </Row>
+      <p className="mt-2 text-[11px] text-dim">
+        Summaries are generated as needed in a separate, billable model request and included in future prompts. The original messages stay in chat history either way.
+      </p>
     </Card>
   );
 };
@@ -644,6 +696,7 @@ export default function SettingsPage() {
         <KeyCard />
         <AnytypeCard />
         <WebCard />
+        <ContextCard />
         <McpCard />
         <Card title="Appearance" icon={state.settings.theme === "dark" ? Moon : Sun} i={1}>
           <div className="glass-pill inline-flex rounded-full p-1">

@@ -26,19 +26,23 @@ async function post(apiKey, body, signal) {
   });
 }
 
-export async function streamChat({ apiKey, model, messages, temperature, onToken, signal }) {
+export async function streamChat({ apiKey, model, messages, temperature, onToken, onUsage, signal }) {
   if (!apiKey) throw new Error("Add your OpenAI API key in Settings first.");
-  const body = { model, messages, stream: true };
+  const body = { model, messages, stream: true, stream_options: { include_usage: true } };
   if (!ignoresTemperature(model) && temperature != null) body.temperature = temperature;
   let res = await post(apiKey, body, signal);
   if (!res.ok) {
     const msg = await readError(res);
     // Some orgs can't stream certain models; fall back to a single response
     if (res.status === 400 && /stream/i.test(msg)) {
-      res = await post(apiKey, { ...body, stream: false }, signal);
+      const fallback = { ...body, stream: false };
+      delete fallback.stream_options;
+      res = await post(apiKey, fallback, signal);
       if (!res.ok) throw new Error(await readError(res));
-      const text = (await res.json()).choices?.[0]?.message?.content || "";
+      const json = await res.json();
+      const text = json.choices?.[0]?.message?.content || "";
       onToken?.(text);
+      onUsage?.(json.usage || null);
       return text;
     }
     throw new Error(msg);
@@ -47,6 +51,7 @@ export async function streamChat({ apiKey, model, messages, temperature, onToken
   const dec = new TextDecoder();
   let buf = "";
   let full = "";
+  let usage = null;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -57,9 +62,14 @@ export async function streamChat({ apiKey, model, messages, temperature, onToken
       const t = line.trim();
       if (!t.startsWith("data:")) continue;
       const data = t.slice(5).trim();
-      if (data === "[DONE]") return full;
+      if (data === "[DONE]") {
+        onUsage?.(usage);
+        return full;
+      }
       try {
-        const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+        const chunk = JSON.parse(data);
+        if (chunk.usage) usage = chunk.usage;
+        const delta = chunk.choices?.[0]?.delta?.content;
         if (delta) {
           full += delta;
           onToken?.(full);
@@ -67,6 +77,7 @@ export async function streamChat({ apiKey, model, messages, temperature, onToken
       } catch {}
     }
   }
+  onUsage?.(usage);
   return full;
 }
 
@@ -83,7 +94,7 @@ export async function completeChat({ apiKey, model, messages, temperature, tools
   const res = await post(apiKey, body, signal);
   if (!res.ok) throw new Error(await readError(res));
   const json = await res.json();
-  return json.choices?.[0]?.message || {};
+  return { ...(json.choices?.[0]?.message || {}), usage: json.usage || null };
 }
 
 export async function listModels(apiKey) {

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Pencil, Trash2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useStore } from "../lib/store";
-import { anytypeReady, listSpaces } from "../lib/anytype";
+import { anytypeConnected, listSpaces } from "../lib/anytype";
 import { COLORS, uid } from "../lib/defaults";
 import { AgentAvatar } from "../components/AgentAvatar";
 import { PageHeader } from "../components/PageHeader";
@@ -38,7 +38,7 @@ const AgentSpaceField = ({ a, set }) => {
   const { state } = useStore();
   const at = state.settings.anytype;
   const [spaces, setSpaces] = useState([]);
-  const ready = anytypeReady(at);
+  const ready = anytypeConnected(at);
   useEffect(() => {
     if (!ready) return;
     let live = true;
@@ -62,12 +62,12 @@ const AgentSpaceField = ({ a, set }) => {
       >
         <SelectTrigger className="field rounded-xl text-xs" data-testid="agent-space-select"><SelectValue /></SelectTrigger>
         <SelectContent className="glass-menu max-h-72">
-          <SelectItem value="__default">Default{at.spaceName ? ` · ${at.spaceName}` : ""}</SelectItem>
+          <SelectItem value="__default">{at.spaceId ? `Settings default · ${at.spaceName || "space"}` : "No space (Settings default)"}</SelectItem>
           {spaces.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <p className="mt-2 text-[11px] text-dim">
-        Which Anytype space this agent reads and writes. Leave it on “Default” to follow Settings → Anytype.
+        Choose a space for this agent, or use the optional Settings default. If neither is selected, Anytype tools are not sent.
       </p>
     </div>
   );

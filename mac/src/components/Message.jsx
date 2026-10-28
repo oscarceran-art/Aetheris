@@ -108,9 +108,10 @@ const speak = (text, setSpeaking) => {
 };
 
 export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, live = false, onSkipReveal, onRevealDone, index, onRegenerate, showRegenerate, onBranch }) => {
-  const { text, revealing } = useReveal(msg.content, msg.streaming, wps);
+  const revealSpeed = msg.revealInstant ? 0 : wps;
+  const { text, revealing } = useReveal(msg.content, msg.streaming, revealSpeed);
   // Word fade length follows the Reply speed setting; Instant mode (wps=0) = no fade
-  const fwDur = wps ? `${fwSeconds(wps).toFixed(2)}s` : "0s";
+  const fwDur = revealSpeed ? `${fwSeconds(revealSpeed).toFixed(2)}s` : "0s";
   const everRevealed = useRef(false);
   const notified = useRef(false);
   if (revealing) everRevealed.current = true;
@@ -138,7 +139,7 @@ export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, liv
     navigator.clipboard.writeText(msg.content);
     toast.success("Copied");
   };
-  const est = msg.usage && !msg.streaming && msg.content ? estimate(msg.usage.model, msg.usage.inChars, msg.content) : null;
+  const est = msg.usage && !msg.streaming && msg.content ? estimate(msg.usage.model, msg.usage.inChars, msg.content, msg.usage.actual) : null;
   const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
   return (
     <div className="group flex gap-4 msg-in" data-testid={`message-agent-${msg.id}`}>
@@ -158,9 +159,9 @@ export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, liv
               {showRegenerate && <Act icon={RotateCcw} onClick={onRegenerate} testid={`regenerate-message-${msg.id}`} title="Regenerate" />}
             </div>
           )}
-          {live && wps > 0 && (
+          {live && revealSpeed > 0 && (
             <button
-              onClick={onSkipReveal}
+              onClick={() => onSkipReveal?.(msg.id)}
               data-click
               data-testid={`skip-reveal-${msg.id}`}
               title="Show this reply instantly"
@@ -186,7 +187,7 @@ export const AgentMessage = memo(({ msg, agent, shimmer, gemPulse, wps = 10, liv
           )}
         </div>
         {!msg.streaming && msg.content && est && (
-          <span className="mt-2 block font-mono text-[10px] text-dim opacity-0 transition-opacity group-hover:opacity-100" data-testid={`cost-${msg.id}`}>~{est.ti + est.to} tok · ${est.cost.toFixed(4)}</span>
+          <span className="mt-2 block font-mono text-[10px] text-dim opacity-0 transition-opacity group-hover:opacity-100" title={msg.usage.actual ? "Calculated from token usage reported by the OpenAI API; price uses standard rates." : "Approximate token count from characters; price uses standard rates."} data-testid={`cost-${msg.id}`}>{est.ti + est.to} tok · ~${est.cost.toFixed(4)}</span>
         )}
       </div>
     </div>

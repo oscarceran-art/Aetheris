@@ -2,11 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Plus, PanelLeftClose, PanelLeftOpen, ArrowDown, Maximize2, Minimize2 } from "lucide-react";
+import { toast } from "sonner";
 import { useStore } from "../lib/store";
 import { streamInto } from "../lib/orchestrate";
 import { anytypeFor, anytypeReady } from "../lib/anytype";
 import { streamChat } from "../lib/openai";
+import { addUsage, normalizeUsage } from "../lib/cost";
+import { prepareContext } from "../lib/context";
 import { gemSystem, resolveGems } from "../lib/gems";
+import { uid } from "../lib/defaults";
 import { docForMessage } from "../lib/docs";
 import { chime, complete, receive, tick, whoosh } from "../lib/sound";
 import { AgentAvatar } from "../components/AgentAvatar";
@@ -76,7 +80,6 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   const [ctrl, setCtrl] = useState(null);
   const [activeId, setActiveId] = useState(null);
   const [revealDoneId, setRevealDoneId] = useState(null);
-  const [revealInstant, setRevealInstant] = useState(false);
   const [confetti, setConfetti] = useState(null);
   const doneRef = useRef(null);
   const composerRef = useRef(null);
@@ -130,33 +133,52 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     return `${parts.join("\n\n")}${m.content ? `\n\n${m.content}` : ""}`;
   };
 
-  const autoTitle = async (q, a) => {
+  const autoTitle = async (q, a, onUsage) => {
     try {
-      const t = await streamChat({ apiKey, model: agent.model, messages: [{ role: "system", content: "Write a 2-5 word title for this chat. Reply with the title only, no quotes." }, { role: "user", content: `${q.slice(0, 400)}\n\n${a.slice(0, 400)}` }] });
+      const t = await streamChat({ apiKey, model: agent.model, messages: [{ role: "system", content: "Write a 2-5 word title for this chat. Reply with the title only, no quotes." }, { role: "user", content: `${q.slice(0, 400)}\n\n${a.slice(0, 400)}` }], onUsage: (u) => onUsage?.(normalizeUsage(u)) });
       if (t.trim()) patchConversation(conv.id, { title: t.trim().replace(/^["']|["'.]$/g, "").slice(0, 60) });
     } catch {}
   };
 
   const run = async (history, userMsg, used, fromRect) => {
-    const prompt = [...history.filter((m) => (m.content || m.notes?.length || m.docs?.length) && !m.error).map((m) => ({ role: m.role, content: withContext(m) })), { role: "user", content: withContext(userMsg) || "Go ahead." }];
+    const prompt = [...history.filter((m) => (m.content || m.notes?.length || m.docs?.length) && !m.error).map((m) => ({ id: m.id, role: m.role, content: withContext(m) })), { id: userMsg.id, role: "user", content: withContext(userMsg) || "Go ahead." }];
     const inChars = agent.persona.length + gemSystem(used).length + prompt.reduce((s, m) => s + m.content.length, 0);
     const id = addMessage(conv.id, { role: "assistant", agentId: agent.id, content: "", streaming: true, gems: userMsg.gems, usage: { model: agent.model, inChars } });
     const c = new AbortController();
     setActiveId(id);
     setRevealDoneId(null);
-    setRevealInstant(false);
     doneRef.current = null;
     setCtrl(c);
     setRunning(true);
     fx.setLive(true);
     fx.launch(used, fromRect || composerRef.current?.getBoundingClientRect());
     try {
-      const out = await streamInto({ apiKey, agent, signal: c.signal, system: gemSystem(used), messages: prompt, anytype: anytypeFor(state.settings.anytype, agent), web: state.settings.web, onUpdate: (p) => updateMessage(conv.id, id, p) });
+      const context = await prepareContext({
+        messages: prompt,
+        config: state.settings.context,
+        memory: conv.contextMemory,
+        apiKey,
+        model: agent.model,
+        onSummarizing: () => updateMessage(conv.id, id, { toolStatus: "summarizing older messages" }),
+      });
+      if (context.memoryChanged) patchConversation(conv.id, { contextMemory: context.memory });
+      if (context.summaryFailed) toast.warning("Couldn’t summarize older messages; they were left out for this reply.");
+      updateMessage(conv.id, id, { toolStatus: null });
+      const response = await streamInto({ apiKey, agent, signal: c.signal, system: gemSystem(used), messages: context.messages, anytype: anytypeFor(state.settings.anytype, agent), web: state.settings.web, onUpdate: (p) => updateMessage(conv.id, id, p) });
+      const out = response.text;
+      const replyUsage = {
+        model: agent.model,
+        inChars: agent.persona.length + gemSystem(used).length + context.messages.reduce((sum, m) => sum + m.content.length, 0),
+        actual: addUsage(context.usage, response.usage),
+      };
+      updateMessage(conv.id, id, { usage: replyUsage });
       receive();
       if (!history.length) {
         setConfetti(Date.now());
         setTimeout(() => setConfetti(null), 1600);
-        autoTitle(userMsg.content || userMsg.docs?.[0]?.name || "", out);
+        autoTitle(userMsg.content || userMsg.docs?.[0]?.name || "", out, (usage) => {
+          if (usage) updateMessage(conv.id, id, { usage: { ...replyUsage, actual: addUsage(replyUsage.actual, usage) } });
+        });
       }
     } catch {}
     // ctrl covers the stream only; the pulsing "live" look is cleared by the
@@ -168,7 +190,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     tick();
     const notes = attached.map((n) => ({ id: n.id, name: n.name, markdown: n.markdown, ...(n.truncated ? { truncated: true } : {}) }));
     const docs = documents.map(docForMessage);
-    const u = { role: "user", content: text, gems: used.map(snap), ...(notes.length ? { notes } : {}), ...(docs.length ? { docs } : {}) };
+    const u = { id: uid(), role: "user", content: text, gems: used.map(snap), ...(notes.length ? { notes } : {}), ...(docs.length ? { docs } : {}) };
     if (!msgs.length) patchConversation(conv.id, { title: (text || docs.map((d) => d.name).join(", ") || notes.map((n) => n.name).join(", ") || used.map((g) => `/${g.trigger}`).join(" ")).slice(0, 48) });
     addMessage(conv.id, u);
     run(msgs, u, used, rect);
@@ -186,7 +208,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   // Stable wrappers so memoized messages/composer don't re-render on every store update
   const sendStable = useLatest(send);
   const stopStable = useLatest(() => ctrl?.abort());
-  const skipRevealStable = useLatest(() => setRevealInstant(true));
+  const skipRevealStable = useLatest((mid) => updateMessage(conv.id, mid, { revealInstant: true }));
   const branchStable = useLatest((i) => branch(i));
   const editStable = useLatest((msgId, v) => {
     const i = msgsRef.current.findIndex((m) => m.id === msgId);
@@ -222,7 +244,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
                 key={m.id}
                 msg={m}
                 agent={agent}
-                wps={revealInstant ? 0 : wps}
+                wps={wps}
                 index={i}
                 live={m.id === activeId && liveAnim}
                 onSkipReveal={skipRevealStable}

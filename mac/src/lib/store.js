@@ -14,7 +14,7 @@ const defaults = () => ({
   agents: DEFAULT_AGENTS.map((a) => ({ ...a, templates: DEFAULT_TEMPLATES[a.id] || [] })),
   conversations: [],
   gems: DEFAULT_GEMS,
-  settings: { apiKey: import.meta.env?.VITE_OPENAI_API_KEY || "", theme: "dark", models: DEFAULT_MODELS, sidebar: "open", chatPanel: true, focus: false, lastChat: {}, wps: 10, instant: false, sound: { muted: false, volume: 0.4 }, web: { enabled: true }, anytype: { enabled: !!ENV_ANYTYPE_KEY, apiKey: ENV_ANYTYPE_KEY, spaceId: "", spaceName: "", write: true, base: "/anytype" } },
+  settings: { apiKey: import.meta.env?.VITE_OPENAI_API_KEY || "", theme: "dark", models: DEFAULT_MODELS, sidebar: "open", chatPanel: true, focus: false, lastChat: {}, wps: 10, instant: false, sound: { muted: false, volume: 0.4 }, context: { mode: "messages", maxMessages: 40, maxTokens: 16000, overflow: "summarize" }, web: { enabled: true }, anytype: { enabled: !!ENV_ANYTYPE_KEY, apiKey: ENV_ANYTYPE_KEY, spaceId: "", spaceName: "", spaceExplicit: false, write: true, base: "/anytype" } },
 });
 
 // Only these two models are offered, so anything saved by an older version (or
@@ -38,8 +38,13 @@ const migrate = (s) => {
       models: DEFAULT_MODELS,
       focus: false, // focus mode is gone — the ⛶ button is plain browser full screen now
       sound: { ...d.settings.sound, ...s.settings?.sound },
+      context: { ...d.settings.context, ...s.settings?.context },
       web: { ...d.settings.web, ...s.settings?.web },
-      anytype: { ...d.settings.anytype, ...s.settings?.anytype },
+      anytype: {
+        ...d.settings.anytype,
+        ...s.settings?.anytype,
+        ...(!s.settings?.anytype?.spaceExplicit ? { spaceId: "", spaceName: "", spaceExplicit: false } : {}),
+      },
     },
   };
 };
