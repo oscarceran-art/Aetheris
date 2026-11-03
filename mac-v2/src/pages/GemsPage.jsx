@@ -7,14 +7,21 @@ import { AgentAvatar } from "../components/AgentAvatar";
 import { GemShape } from "../components/Gem";
 import { GemDialog, newGem } from "../components/GemDialog";
 
-const GemCard = ({ gem, i, onEdit }) => {
+const GemCard = ({ gem, i, onEdit, stats }) => {
   const { deleteGem, upsertGem } = useStore();
+  const used = stats?.count || 0;
+  const lastUsed = stats?.lastUsed
+    ? new Date(stats.lastUsed).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
   return (
     <div className="glass-card rise group flex items-start gap-4 rounded-3xl p-5" style={{ animationDelay: `${i * 40}ms`, "--glow": gem.color }} data-testid={`gem-card-${gem.id}`}>
       <div className="pt-1"><GemShape color={gem.color} size={26} /></div>
       <div className="min-w-0 flex-1">
         <div className="font-mono text-base font-medium" style={{ color: `color-mix(in srgb, ${gem.color} 75%, var(--fg))` }}>/{gem.trigger}</div>
         <p className="mt-1 text-sm leading-relaxed text-dim">{gem.instruction}</p>
+        <p className="mt-2 font-mono text-[10px] text-dim" data-testid={`gem-usage-${gem.id}`}>
+          {used > 0 ? `thrown ${used}×${lastUsed ? ` · last ${lastUsed}` : ""}` : "not thrown yet"}
+        </p>
       </div>
       <div className="flex gap-1 opacity-60 transition-opacity group-hover:opacity-100">
         <button onClick={() => upsertGem({ ...gem, fav: !gem.fav })} className={`btn-icon h-8 w-8 ${gem.fav ? "text-amber-400" : "text-dim hover:text-fg"}`} data-testid={`gem-fav-${gem.id}`} title="Favourite shelf"><Star className={`h-4 w-4 ${gem.fav ? "fill-current" : ""}`} /></button>
@@ -25,14 +32,21 @@ const GemCard = ({ gem, i, onEdit }) => {
   );
 };
 
-const Section = ({ title, icon, gems, onEdit, testid }) => (
-  <section className="space-y-3" data-testid={testid}>
-    <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-dim">{icon}{title} · {gems.length}</div>
-    <div className="grid gap-3 lg:grid-cols-2">
-      {gems.map((g, i) => <GemCard key={g.id} gem={g} i={i} onEdit={() => onEdit(g)} />)}
-    </div>
-  </section>
-);
+const Section = ({ title, icon, gems, onEdit, testid }) => {
+  const { state } = useStore();
+  const stats = state.gemStats || {};
+  const sorted = [...gems].sort(
+    (a, b) => Number(!!b.fav) - Number(!!a.fav) || (stats[b.id]?.count || 0) - (stats[a.id]?.count || 0)
+  );
+  return (
+    <section className="space-y-3" data-testid={testid}>
+      <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-dim">{icon}{title} · {gems.length}</div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {sorted.map((g, i) => <GemCard key={g.id} gem={g} i={i} onEdit={() => onEdit(g)} stats={stats[g.id]} />)}
+      </div>
+    </section>
+  );
+};
 
 export default function GemsPage() {
   const { state } = useStore();

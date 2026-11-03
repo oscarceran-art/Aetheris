@@ -8,6 +8,7 @@ import { modelOptions } from "../lib/models";
 import { COLORS, uid } from "../lib/defaults";
 import { AgentAvatar } from "../components/AgentAvatar";
 import { PageHeader } from "../components/PageHeader";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { GemChip } from "../components/Gem";
 import { GemDialog, newGem } from "../components/GemDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
@@ -159,8 +160,8 @@ const AgentCard = ({ agent, i, onEdit }) => {
   const { agents } = useDirectory();
   const { deleteAgent, createConversation } = useActions();
   const nav = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const remove = () => {
-    if (!window.confirm(`Delete ${agent.name}, its chats and its gems?`)) return;
     deleteAgent(agent.id);
     toast(`${agent.name} removed`);
   };
@@ -182,9 +183,10 @@ const AgentCard = ({ agent, i, onEdit }) => {
         <div className="ml-auto flex gap-1">
           <button onClick={() => { const c = createConversation({ type: "chat", agentId: agent.id, title: "New chat" }); nav(`/agent/${agent.id}/chat/${c.id}`); }} aria-label={`Chat with ${agent.name}`} className="btn-icon h-8 w-8 text-dim hover:text-fg" data-testid={`agent-chat-${agent.id}`}><MessageSquare className="h-4 w-4" /></button>
           <button onClick={onEdit} aria-label={`Edit ${agent.name}`} className="btn-icon h-8 w-8 text-dim hover:text-fg" data-testid={`agent-edit-${agent.id}`}><Pencil className="h-4 w-4" /></button>
-          <button disabled={agents.length <= 1} onClick={remove} aria-label={`Delete ${agent.name}`} className="btn-icon h-8 w-8 text-dim hover:text-red-400 disabled:opacity-30" data-testid={`agent-delete-${agent.id}`}><Trash2 className="h-4 w-4" /></button>
+          <button disabled={agents.length <= 1} onClick={() => setConfirmDelete(true)} aria-label={`Delete ${agent.name}`} className="btn-icon h-8 w-8 text-dim hover:text-red-400 disabled:opacity-30" data-testid={`agent-delete-${agent.id}`}><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
+      <ConfirmDialog open={confirmDelete} title={`Delete ${agent.name}?`} body="Its chats and gems go with it. This can't be undone." confirmLabel="Delete" onConfirm={() => { setConfirmDelete(false); remove(); }} onClose={() => setConfirmDelete(false)} />
     </div>
   );
 };

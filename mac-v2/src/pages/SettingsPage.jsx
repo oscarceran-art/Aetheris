@@ -11,6 +11,7 @@ import { modelOptions } from "../lib/models";
 import { workspaceCost } from "../lib/cost";
 import { chime } from "../lib/sound";
 import { PageHeader } from "../components/PageHeader";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -25,12 +26,15 @@ const Row = ({ label, children }) => (
 const MotionCard = () => {
   const settings = useSettings();
   const { setSettings } = useActions();
-  const { wps, instant, sound } = settings;
+  const { wps, instant, sound, reduceMotion } = settings;
   return (
     <>
       <Card title="Reply speed" icon={Gauge} i={2}>
         <Row label="Instant (no word-by-word fade)">
           <Switch checked={instant} onCheckedChange={(v) => setSettings({ instant: v })} data-testid="instant-switch" />
+        </Row>
+        <Row label="Reduce motion">
+          <Switch checked={!!reduceMotion} onCheckedChange={(v) => setSettings({ reduceMotion: v })} data-testid="reduce-motion-switch" />
         </Row>
         <Row label={`Fade-in pace · ${wps} words / sec`}>
           <Slider className="w-56" min={4} max={40} step={1} value={[wps]} disabled={instant} onValueChange={([v]) => setSettings({ wps: v })} data-testid="wps-slider" />
@@ -58,8 +62,10 @@ const MotionCard = () => {
   );
 };
 
+const cardId = (title) => `settings-${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
 const Card = ({ title, icon: Icon, children, i = 0 }) => (
-  <section className="glass-card rise rounded-3xl p-6" style={{ animationDelay: `${i * 60}ms` }}>
+  <section id={cardId(title)} data-testid={cardId(title)} className="glass-card rise rounded-3xl p-6" style={{ animationDelay: `${i * 60}ms` }}>
     <div className="mb-4 flex items-center gap-2 font-display font-semibold text-fg"><Icon className="h-4 w-4 text-accent" /> {title}</div>
     {children}
   </section>
@@ -424,6 +430,7 @@ const McpCard = () => {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(null);
+  const [confirmRemove, setConfirmRemove] = useState(null);
 
   const load = async () => {
     try {
@@ -496,7 +503,6 @@ const McpCard = () => {
   };
 
   const remove = async (s) => {
-    if (!window.confirm(`Remove the “${s.name}” MCP server?`)) return;
     await persist((servers || []).filter((x) => x.name !== s.name));
     toast(`${s.name} removed`);
   };
@@ -663,7 +669,7 @@ const McpCard = () => {
                 <Pencil className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => remove(s)}
+                onClick={() => setConfirmRemove(s)}
                 title="Remove"
                 aria-label={`Remove ${s.name}`}
                 className="p-1.5 text-dim transition-colors hover:text-red-400"
@@ -671,6 +677,16 @@ const McpCard = () => {
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
+              {confirmRemove?.name === s.name && (
+                <ConfirmDialog
+                  open
+                  title={`Remove “${s.name}”?`}
+                  body="Its tools stop being offered to every agent. You can add it back anytime."
+                  confirmLabel="Remove"
+                  onConfirm={() => { remove(confirmRemove); setConfirmRemove(null); }}
+                  onClose={() => setConfirmRemove(null)}
+                />
+              )}
             </div>
           );
         })}
@@ -724,6 +740,7 @@ const DataCard = () => {
   const { state, device, storage, connectDevice, reconnectDevice, saveDeviceNow, loadDevice, disconnectDevice, replaceAll, reset } = useStore();
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const run = async (fn, ok) => {
     setBusy(true);
     try {
@@ -816,21 +833,43 @@ const DataCard = () => {
         <button onClick={() => fileRef.current?.click()} className="btn-ghost" data-testid="import-data-button"><Upload className="h-4 w-4" /> Import JSON</button>
         <input ref={fileRef} type="file" accept="application/json" hidden onChange={importData} data-testid="import-data-input" />
         <button
-          onClick={() => {
-            if (window.confirm(`Erase all local agents, chats, gems and your key?${connected ? `\n\nThis also clears the copy saved to ${device.name}.` : ""}`)) {
-              reset();
-              toast("All local data cleared");
-            }
-          }}
+          onClick={() => setConfirmReset(true)}
           className="btn-ghost text-red-400"
           data-testid="reset-data-button"
         >
           <Trash2 className="h-4 w-4" /> Reset everything
         </button>
+        <ConfirmDialog
+          open={confirmReset}
+          title="Reset everything?"
+          body={`Erase all local agents, chats, gems and your key?${connected ? ` This also clears the copy saved to ${device.name}.` : ""}`}
+          confirmLabel="Erase all"
+          onConfirm={() => { setConfirmReset(false); reset(); toast("All local data cleared"); }}
+          onClose={() => setConfirmReset(false)}
+        />
       </div>
     </Card>
   );
 };
+
+const SECTIONS = ["OpenAI API key", "Models", "Anytype", "Web", "Conversation context", "MCP tools", "Appearance", "Reply speed", "Sound", "Usage", "Local data"];
+
+const SettingsNav = () => (
+  <div className="sticky top-0 z-10 -mx-6 bg-[color:var(--bg)]/80 px-6 py-2 backdrop-blur-md sm:-mx-10 sm:px-10" data-testid="settings-nav">
+    <div className="flex gap-1.5 overflow-x-auto scroll-thin pb-1">
+      {SECTIONS.map((s) => (
+        <button
+          key={s}
+          onClick={() => document.getElementById(cardId(s))?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          className="shrink-0 rounded-full border border-[color:var(--line)] px-3 py-1 text-xs text-dim transition-colors hover:text-fg"
+          data-testid={`settings-nav-${cardId(s)}`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 export default function SettingsPage() {
   const { state, setSettings } = useStore();
@@ -838,6 +877,7 @@ export default function SettingsPage() {
     <div className="h-full overflow-y-auto scroll-thin" data-testid="settings-page">
       <PageHeader eyebrow="Settings" title="Local-first, by design." />
       <div className="mx-auto max-w-3xl space-y-4 px-6 pb-16 sm:px-10">
+        <SettingsNav />
         <KeyCard />
         <ModelsCard />
         <AnytypeCard />
@@ -852,6 +892,19 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+          <Row label="Density">
+            <div className="glass-pill inline-flex rounded-full p-1">
+              {[["comfortable", "Comfortable"], ["compact", "Compact"]].map(([v, label]) => (
+                <button key={v} onClick={() => setSettings({ density: v })} data-testid={`density-option-${v}`} className={`rounded-full px-4 py-1.5 text-sm ${(state.settings.density || "comfortable") === v ? "btn-accent" : "text-dim"}`}>{label}</button>
+              ))}
+            </div>
+          </Row>
+          <Row label={`Accent hue · ${state.settings.accentHue ?? 265}°`}>
+            <span className="flex items-center gap-3">
+              <span className="h-5 w-5 rounded-full border border-[color:var(--line)]" style={{ background: "var(--accent)" }} aria-hidden />
+              <input type="range" min={0} max={360} value={state.settings.accentHue ?? 265} onChange={(e) => setSettings({ accentHue: Number(e.target.value) })} className="w-40 sm:w-56" style={{ accentColor: "var(--accent)" }} aria-label="Accent hue" data-testid="accent-slider" />
+            </span>
+          </Row>
         </Card>
         <MotionCard />
         <UsageCard />

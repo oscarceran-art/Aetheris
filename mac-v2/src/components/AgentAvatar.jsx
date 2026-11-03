@@ -61,6 +61,17 @@ export const AgentAvatar = ({ agent, size = 36, pulse = false, gemPulse = null, 
   const c2 = preset >= 0 ? COLORS[(preset + 1 + (h % 3)) % COLORS.length] : hueShift(c1, 38 + (h % 3) * 26);
   const gp = useCycle(gemPulse);
   const ring = size >= 28;
+  // Tiny instances (menus, lists) render a static dot: the full orb's ~15
+  // animated layers are invisible at this size and cost real battery en masse.
+  if (size < 28 && !pulse && !gemPulse && !impact) {
+    return (
+      <div
+        className="orb-dot"
+        data-testid={`agent-orb-${agent?.id}`}
+        style={{ width: size, height: size, background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.75), transparent 42%), radial-gradient(circle at 50% 55%, ${c1}, color-mix(in srgb, ${c1} 45%, #000))` }}
+      />
+    );
+  }
   return (
     <div
       className={`orb-av ${pulse ? "orb-live" : ""} ${gp ? "orb-gpulse" : ""}`}

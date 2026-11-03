@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import { useStore } from "../lib/store";
 import { PageHeader } from "../components/PageHeader";
 import { uid } from "../lib/defaults";
@@ -83,7 +84,9 @@ const monthGrid = (month) => {
 };
 
 export default function TodoPage() {
-  const { state, setSettings } = useStore();
+  const { state, setSettings, createConversation } = useStore();
+  const nav = useNavigate();
+  const agents = state.agents || [];
   const todos = state.settings.todos || [];
   const today = localDateKey();
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -92,7 +95,18 @@ export default function TodoPage() {
   const [filter, setFilter] = useState("all");
   const [draft, setDraft] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [askAgent, setAskAgent] = useState("");
   const update = (next) => setSettings({ todos: next });
+  const askTarget = agents.find((a) => a.id === askAgent) || agents[0];
+  const sendTask = (task) => {
+    if (!askTarget) return;
+    const c = createConversation({ type: "chat", agentId: askTarget.id, title: task.title.slice(0, 48) });
+    const body = [`Help me with this task: ${task.title}`, task.due ? `Due: ${formatDateKey(task.due)}` : "", task.notes ? `Notes: ${task.notes}` : ""].filter(Boolean).join("\n");
+    try {
+      localStorage.setItem(`aetheris.draft.${c.id}`, body);
+    } catch {}
+    nav(`/agent/${askTarget.id}/chat/${c.id}`);
+  };
 
   const stats = useMemo(() => ({
     open: todos.filter((t) => !t.done).length,
@@ -272,6 +286,11 @@ export default function TodoPage() {
                   <button key={option.id} onClick={() => setView(option.id)} className={`rounded-full px-3 py-1.5 text-[11px] transition-colors ${view === option.id ? "btn-accent" : "text-dim hover:text-fg"}`} data-testid={`todo-view-${option.id}`}>{option.label}</button>
                 ))}
               </div>
+              {agents.length > 0 && (
+                <select value={askTarget?.id || ""} onChange={(e) => setAskAgent(e.target.value)} className="field max-w-36 rounded-xl px-2.5 py-2 text-[11px]" aria-label="Agent to ask for help" data-testid="todo-ask-agent">
+                  {agents.map((a) => <option key={a.id} value={a.id}>Ask {a.name}</option>)}
+                </select>
+              )}
               <select value={filter} onChange={(e) => setFilter(e.target.value)} className="field max-w-32 rounded-xl px-2.5 py-2 text-[11px]" aria-label="Filter tasks" data-testid="todo-filter-select">
                 <option value="all">All status</option>
                 <option value="active">Open</option>
@@ -316,6 +335,9 @@ export default function TodoPage() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5">
+                      {askTarget && !task.done && (
+                        <button onClick={() => sendTask(task)} className="btn-icon h-8 w-8 text-dim hover:text-fg" title={`Ask ${askTarget.name} for help`} aria-label={`Ask ${askTarget.name} about ${task.title}`} data-testid={`todo-ask-${task.id}`}><Send className="h-3.5 w-3.5" /></button>
+                      )}
                       <button onClick={() => setEditing({ ...task })} className="btn-icon h-8 w-8 text-dim hover:text-fg" title="Edit task" aria-label={`Edit ${task.title}`} data-testid={`todo-edit-open-${task.id}`}><Pencil className="h-3.5 w-3.5" /></button>
                       <button onClick={() => remove(task.id)} className="btn-icon h-8 w-8 text-dim hover:text-rose-400" title="Delete task" aria-label={`Delete ${task.title}`} data-testid={`todo-remove-${task.id}`}><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>

@@ -32,6 +32,13 @@ This is the **macOS app** and the only supported version of Aetheris.
 > - **A11y** — icon buttons labelled; hover-only actions also appear on keyboard focus.
 > - **Cleanups** — collision-safe ids, no silent failures in the send path, Anytype errors say when the dev
 >   server/proxy is the problem.
+> - **UI batch** — syntax-highlighted code blocks with copy buttons; per-reply tool transcript (“what the
+>   agent did”) and Sources footer; image attachments with vision; @mentions that draft handoffs to other
+>   agents; reply variants when regenerating; model-switch and summarization dividers; day dividers and
+>   timestamps; collapsible long replies; branch-back banners; live tab titles; agent presence dots;
+>   prompt history (↑/↓) and draft token estimates in the composer; redesigned Home with pinned chats;
+>   Settings section nav, accent hue, density and reduce-motion controls; styled confirm dialogs
+>   everywhere; gem usage stats; Todo→agent bridge; Galaxy conversation timeline.
 
 ## Requirements
 

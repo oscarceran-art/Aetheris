@@ -82,7 +82,11 @@ const Group = ({ label, list, agent, activeId }) =>
 export const ChatPanel = ({ agent, activeId, onNewChat }) => {
   const conversations = useConversations();
   const { gems: allGems } = useDirectory();
+  const { patchConversation } = useActions();
   const [q, setQ] = useState("");
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const activeConv = conversations.find((c) => c.id === activeId);
+  const memory = activeConv?.contextMemory?.summary || "";
   const ql = q.trim().toLowerCase();
   const all = conversations.filter((c) => c.agentId === agent.id).sort((a, b) => b.updatedAt - a.updatedAt);
   const list = ql ? all.filter((c) => c.title.toLowerCase().includes(ql) || c.messages.some((m) => m.content?.toLowerCase().includes(ql))) : all;
@@ -99,6 +103,20 @@ export const ChatPanel = ({ agent, activeId, onNewChat }) => {
         <Group label="Chats" list={list.filter((c) => !c.pinned)} agent={agent} activeId={activeId} />
         {!list.length && <p className="px-3 pt-4 text-xs text-dim">{ql ? "No matching chats." : "No chats yet."}</p>}
       </div>
+      {memory && (
+        <div className="border-t border-[color:var(--line)] pt-3" data-testid="chat-memory">
+          <button data-click onClick={() => setMemoryOpen((v) => !v)} className="flex w-full items-center justify-between gap-2 px-1 font-mono text-[10px] uppercase tracking-[0.2em] text-dim transition-colors hover:text-fg" aria-expanded={memoryOpen} data-testid="chat-memory-toggle">
+            <span>Memory</span>
+            <span aria-hidden>{memoryOpen ? "−" : "+"}</span>
+          </button>
+          {memoryOpen && (
+            <>
+              <p className="mt-2 max-h-32 overflow-y-auto scroll-thin rounded-xl border border-[color:var(--line)] px-3 py-2 text-xs leading-relaxed text-dim" style={{ background: "color-mix(in srgb, var(--fg) 4%, transparent)" }} data-testid="chat-memory-text">{memory}</p>
+              <button data-click onClick={() => patchConversation(activeId, { contextMemory: null })} className="mt-1 px-1 text-[11px] text-dim transition-colors hover:text-rose-400" data-testid="chat-memory-clear">Forget this summary</button>
+            </>
+          )}
+        </div>
+      )}
       <div className="border-t border-[color:var(--line)] pt-3">
         <div className="mb-2 px-1 font-mono text-[10px] uppercase tracking-[0.2em] text-dim">Gems</div>
         <div className="flex flex-wrap gap-1.5" data-testid="panel-gems">

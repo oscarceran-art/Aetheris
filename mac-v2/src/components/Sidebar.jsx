@@ -1,6 +1,6 @@
 import { NavLink, matchPath, useLocation, useNavigate } from "react-router-dom";
 import { Bot, Gem, Settings, Moon, Sun, KeyRound, PanelLeftClose, PanelLeftOpen, EyeOff, Search, Volume2, VolumeX, Keyboard, MessageSquare, Home, CalendarCheck, Orbit } from "lucide-react";
-import { useActions, useDirectory, useSettings } from "../lib/store";
+import { useActions, useDirectory, usePresence, useSettings } from "../lib/store";
 import { AgentAvatar } from "./AgentAvatar";
 
 export const NAV = [
@@ -41,6 +41,7 @@ const MuteToggle = () => {
 
 const AgentList = ({ rail }) => {
   const { agents } = useDirectory();
+  const presence = usePresence();
   const nav = useNavigate();
   const activeId = useActiveAgentId();
   return (
@@ -56,7 +57,10 @@ const AgentList = ({ rail }) => {
           className={`rise flex w-full items-center rounded-2xl transition-colors ${rail ? "justify-center px-1 py-2.5" : "gap-4 px-3 py-2.5"} ${a.id === activeId ? "nav-active" : "hover:bg-[color:var(--hover)]"}`}
           style={{ animationDelay: `${i * 45}ms` }}
         >
-          <AgentAvatar agent={a} size={rail ? 28 : 32} />
+          <span className="relative shrink-0">
+            <AgentAvatar agent={a} size={rail ? 28 : 32} />
+            {presence === a.id && <span className="status-live absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400" title="Generating…" />}
+          </span>
           {!rail && (
             <span className="min-w-0 flex-1 text-left">
               <span className="block truncate text-sm font-medium text-fg">{a.name}</span>

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Plus, PanelLeftClose, PanelLeftOpen, ArrowDown, Maximize2, Minimize2 } from "lucide-react";
+import { Plus, PanelLeftClose, PanelLeftOpen, ArrowDown, Maximize2, Minimize2, GitBranch } from "lucide-react";
+import { formatDateKey, localDateKey } from "../lib/dates";
 import { toast } from "sonner";
 import { useActions, useConversations, useDirectory, useSettings } from "../lib/store";
-import { streamInto } from "../lib/orchestrate";
+import { sourcesFromTranscript, streamInto } from "../lib/orchestrate";
+import { buildHandoff } from "../lib/handoff";
 import { anytypeFor, anytypeReady } from "../lib/anytype";
 import { streamChat } from "../lib/openai";
 import { addUsage, chatCost, normalizeUsage } from "../lib/cost";
@@ -79,8 +81,8 @@ const Confetti = ({ colors }) => (
 
 const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   const settings = useSettings();
-  const { gems: allGems } = useDirectory();
-  const { addMessage, updateMessage, patchConversation, createConversation } = useActions();
+  const { agents, gems: allGems } = useDirectory();
+  const { addMessage, updateMessage, patchConversation, createConversation, setPresence, recordGemUse } = useActions();
   const nav = useNavigate();
   const [ctrl, setCtrl] = useState(null);
   const [activeId, setActiveId] = useState(null);
@@ -128,8 +130,16 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
   useEffect(() => {
     if (liveAnim) return;
     setRunning(false);
+    setPresence(null);
     fx.setLive(false);
   }, [liveAnim]);
+  useEffect(() => {
+    document.title = liveAnim ? `● ${agent.name} is typing… · Aetheris` : "Aetheris v2";
+    return () => {
+      document.title = "Aetheris v2";
+      setPresence(null);
+    };
+  }, [liveAnim, agent.name]);
 
   const liveGems = (snaps = []) => snaps.map((s) => allGems.find((g) => g.id === s.id) || (s.instruction && s)).filter(Boolean);
 
@@ -140,7 +150,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     } catch {}
   };
 
-  const run = async (history, userMsg, used, fromRect) => {
+  const run = async (history, userMsg, used, fromRect, priorVariants = []) => {
     // Prompt assembly (lib/prompt.js): attachments ride along newest-first
     // inside a shared budget instead of re-sending every file every turn.
     const base = [
@@ -148,6 +158,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
       { ...userMsg, content: userMsg.content || "Go ahead." },
     ];
     const built = buildPromptMessages(base);
+    const images = base.flatMap((m) => (m.docs || []).filter((d) => d.kind === "image" && d.dataUrl).map((d) => d.dataUrl));
     const gemText = gemSystem(used);
     const inChars = agent.persona.length + gemText.length + built.rows.reduce((s, m) => s + m.content.length, 0);
     const id = addMessage(conv.id, { role: "assistant", agentId: agent.id, content: "", streaming: true, gems: userMsg.gems, usage: { model: agent.model, inChars } });
@@ -157,6 +168,8 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     doneRef.current = null;
     setCtrl(c);
     setRunning(true);
+    setPresence(agent.id);
+    if (used.length) recordGemUse(used.map((g) => g.id));
     fx.setLive(true);
     fx.launch(used, fromRect || composerRef.current?.getBoundingClientRect());
     try {
@@ -168,17 +181,26 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
         model: agent.model,
         onSummarizing: () => updateMessage(conv.id, id, { toolStatus: "summarizing older messages" }),
       });
-      if (context.memoryChanged) patchConversation(conv.id, { contextMemory: context.memory });
-      if (context.summaryFailed) toast.warning("Couldn’t summarize older messages; they were left out for this reply.");
+      if (context.memoryChanged) {
+        patchConversation(conv.id, { contextMemory: context.memory });
+        addMessage(conv.id, { id: uid(), createdAt: Date.now(), role: "event", text: `Context summarized (${context.messages.length} messages kept)` });
+      }
+      if (context.summaryFailed) toast.warning("Couldn't summarize older messages; they were left out for this reply.");
       updateMessage(conv.id, id, { toolStatus: null });
-      const response = await streamInto({ apiKey, agent, signal: c.signal, system: gemText, messages: context.messages, anytype: anytypeFor(settings.anytype, agent), web: settings.web, onUpdate: (p) => updateMessage(conv.id, id, p) });
+      const response = await streamInto({ apiKey, agent, signal: c.signal, system: gemText, messages: context.messages, images, anytype: anytypeFor(settings.anytype, agent), web: settings.web, onUpdate: (p) => updateMessage(conv.id, id, p) });
       const out = response.text;
       const replyUsage = {
         model: agent.model,
         inChars: agent.persona.length + gemText.length + context.messages.reduce((sum, m) => sum + m.content.length, 0),
         actual: addUsage(context.usage, response.usage),
       };
-      updateMessage(conv.id, id, { usage: replyUsage });
+      updateMessage(conv.id, id, {
+        usage: replyUsage,
+        variants: [...priorVariants, out],
+        variantIdx: priorVariants.length,
+        toolCalls: response.transcript?.length ? response.transcript : undefined,
+        sources: sourcesFromTranscript(response.transcript),
+      });
       receive();
       if (!history.length) {
         setConfetti(Date.now());
@@ -197,7 +219,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     setCtrl(null);
   };
 
-  const send = (text, used, rect, attached = [], documents = []) => {
+  const send = (text, used, rect, attached = [], documents = [], mentions = []) => {
     tick();
     const notes = attached.map((n) => ({ id: n.id, name: n.name, markdown: n.markdown, ...(n.truncated ? { truncated: true } : {}) }));
     const docs = documents.map(docForMessage);
@@ -205,14 +227,31 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     if (!msgs.length) patchConversation(conv.id, { title: (text || docs.map((d) => d.name).join(", ") || notes.map((n) => n.name).join(", ") || used.map((g) => `/${g.trigger}`).join(" ")).slice(0, 48) });
     addMessage(conv.id, u);
     run(msgs, u, used, rect);
+    // @mentions: draft the same message as a handoff into each mentioned
+    // agent's space so they can pick it up in parallel.
+    const others = (mentions || []).filter((a) => a.id !== agent.id);
+    if (others.length) {
+      const drafts = others.map((target) => {
+        const c = createConversation({ type: "chat", agentId: target.id, title: `↳ @${target.name} from ${agent.name}` });
+        const handoffText = buildHandoff({ message: u, fromAgent: agent, instruction: `The user mentioned you (@${target.name}) in a message to me — take it from here.` });
+        try {
+          localStorage.setItem(`aetheris.draft.${c.id}`, handoffText);
+        } catch {}
+        return { target, conv: c };
+      });
+      toast.success(drafts.length === 1 ? `Also drafted for ${drafts[0].target.name}` : `Also drafted for ${drafts.length} agents`, {
+        action: { label: "Open", onClick: () => nav(`/agent/${drafts[0].target.id}/chat/${drafts[0].conv.id}`) },
+      });
+    }
   };
   const resendFrom = (idx, content) => {
     const u = { ...msgs[idx], content };
+    const prior = msgs.slice(idx).filter((m) => m.role === "assistant" && m.content && !m.error).flatMap((m) => (m.variants?.length ? m.variants : [m.content]));
     patchConversation(conv.id, { messages: [...msgs.slice(0, idx), u] });
-    run(msgs.slice(0, idx), u, liveGems(u.gems));
+    run(msgs.slice(0, idx), u, liveGems(u.gems), undefined, prior);
   };
   const branch = (idx) => {
-    const c = createConversation({ type: "chat", agentId: agent.id, title: `↳ ${conv.title}`, messages: msgs.slice(0, idx + 1).map((m) => ({ ...m, streaming: false })) });
+    const c = createConversation({ type: "chat", agentId: agent.id, title: `↳ ${conv.title}`, branchedFrom: { convId: conv.id, title: conv.title }, messages: msgs.slice(0, idx + 1).map((m) => ({ ...m, streaming: false })) });
     nav(`/agent/${agent.id}/chat/${c.id}`);
   };
 
@@ -231,12 +270,34 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
     const ui = ms.map((m) => m.role).lastIndexOf("user");
     if (ui >= 0) resendFrom(ui, ms[ui].content);
   });
+  const variantStable = useLatest((mid, i) => {
+    const m = msgsRef.current.find((x) => x.id === mid);
+    if (m?.variants?.length) updateMessage(conv.id, mid, { content: m.variants[i], variantIdx: i });
+  });
+  const dayKey = (t) => {
+    try {
+      return localDateKey(new Date(t || Date.now()));
+    } catch {
+      return "";
+    }
+  };
+  const dayLabel = (t) => {
+    const k = dayKey(t);
+    if (k === localDateKey()) return "Today";
+    if (k === localDateKey(new Date(Date.now() - 86400000))) return "Yesterday";
+    return formatDateKey(k, { weekday: "short", month: "short", day: "numeric" });
+  };
 
   return (
     <motion.div className="relative flex h-full flex-col" data-testid="chat-room" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35 }}>
       {confetti && <Confetti key={confetti} colors={[agent.color, ...(msgs[0]?.gems || []).map((g) => g.color), "#ffffff"]} />}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto scroll-thin">
-        <div className="mx-auto max-w-3xl space-y-7 px-6 py-8">
+        <div className="chat-msgs mx-auto max-w-3xl space-y-7 px-6 py-8">
+          {conv.branchedFrom && (
+            <button data-click onClick={() => nav(`/agent/${agent.id}/chat/${conv.branchedFrom.convId}`)} className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-[color:var(--line)] px-4 py-2.5 text-xs text-dim transition-colors hover:text-fg" data-testid="branch-banner">
+              <GitBranch className="h-3.5 w-3.5 shrink-0" /> Branched from {conv.branchedFrom.title || "an earlier chat"} — jump back
+            </button>
+          )}
           {!msgs.length && (
             <div className="rise py-16 text-center" data-testid="chat-empty">
               <p className="font-display text-xl text-fg">Say something to {agent.name}</p>
@@ -246,30 +307,60 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
                   Type <span className="font-mono text-fg">\\</span> to attach one of your Anytype notes.
                 </p>
               )}
+              {agents.length > 1 && (
+                <p className="mt-1 text-sm text-dim" data-testid="chat-empty-mention-hint">
+                  Type <span className="font-mono text-fg">@</span> to loop another agent in.
+                </p>
+              )}
             </div>
           )}
-          {msgs.map((m, i) =>
-            m.role === "user" ? (
-              <UserMessage key={m.id} msg={m} index={i} canEdit={!ctrl} onEdit={editStable} onBranch={branchStable} onHandoff={handoffStable} />
-            ) : (
-              <AgentMessage
-                key={m.id}
-                msg={m}
-                agent={agent}
-                wps={wps}
-                index={i}
-                live={m.id === activeId && liveAnim}
-                onSkipReveal={skipRevealStable}
-                onRevealDone={revealDone}
-                shimmer={m.id === activeId ? fx.impact : null}
-                gemPulse={m.id === activeId && liveAnim && fx.pulse.length ? fx.pulse : null}
-                onBranch={branchStable}
-                onHandoff={handoffStable}
-                onRegenerate={regenerateStable}
-                showRegenerate={!ctrl && i === msgs.length - 1 && lastUserIdx >= 0}
-              />
-            )
-          )}
+          {msgs.map((m, i) => {
+            const showDay = i === 0 || dayKey(m.createdAt) !== dayKey(msgs[i - 1]?.createdAt);
+            const divider = showDay ? (
+              <div className="flex items-center gap-3 px-2" data-testid="day-divider" aria-hidden>
+                <span className="h-px flex-1 bg-[color:var(--line)]" />
+                <span className="rounded-full border border-[color:var(--line)] px-3 py-0.5 font-mono text-[10px] uppercase tracking-wider text-dim">{dayLabel(m.createdAt)}</span>
+                <span className="h-px flex-1 bg-[color:var(--line)]" />
+              </div>
+            ) : null;
+            if (m.role === "event") {
+              return (
+                <Fragment key={m.id}>
+                  {divider}
+                  <div className="flex items-center gap-3 px-2" data-testid={`event-${m.id}`}>
+                    <span className="h-px flex-1 bg-[color:var(--line)]" />
+                    <span className="font-mono text-[10px] text-dim">{m.text}</span>
+                    <span className="h-px flex-1 bg-[color:var(--line)]" />
+                  </div>
+                </Fragment>
+              );
+            }
+            return (
+              <Fragment key={m.id}>
+                {divider}
+                {m.role === "user" ? (
+                  <UserMessage msg={m} index={i} canEdit={!ctrl} onEdit={editStable} onBranch={branchStable} onHandoff={handoffStable} />
+                ) : (
+                  <AgentMessage
+                    msg={m}
+                    agent={agent}
+                    wps={wps}
+                    index={i}
+                    live={m.id === activeId && liveAnim}
+                    onSkipReveal={skipRevealStable}
+                    onRevealDone={revealDone}
+                    shimmer={m.id === activeId ? fx.impact : null}
+                    gemPulse={m.id === activeId && liveAnim && fx.pulse.length ? fx.pulse : null}
+                    onBranch={branchStable}
+                    onHandoff={handoffStable}
+                    onRegenerate={regenerateStable}
+                    onVariant={variantStable}
+                    showRegenerate={!ctrl && i === msgs.length - 1 && lastUserIdx >= 0}
+                  />
+                )}
+              </Fragment>
+            );
+          })}
         </div>
       </div>
       <AnimatePresence>
@@ -280,7 +371,7 @@ const ChatRoom = ({ conv, agent, fx, setRunning }) => {
         )}
       </AnimatePresence>
       <div ref={composerRef}>
-        <Composer onSend={sendStable} running={!!ctrl} live={activeReveal} color={agent.color} gemColor={fx.pulse.length ? fx.pulse[fx.pulse.length - 1] : null} onStop={stopStable} noKey={!apiKey} gems={gems} templates={msgs.length ? EMPTY_TEMPLATES : agent.templates} draftKey={conv.id} placeholder={`Message ${agent.name}…`} testid="chat-composer" anytype={anytypeFor(settings.anytype, agent)} meter={meter} />
+        <Composer onSend={sendStable} running={!!ctrl} live={activeReveal} color={agent.color} gemColor={fx.pulse.length ? fx.pulse[fx.pulse.length - 1] : null} onStop={stopStable} noKey={!apiKey} gems={gems} agents={agents} templates={msgs.length ? EMPTY_TEMPLATES : agent.templates} draftKey={conv.id} placeholder={`Message ${agent.name}…`} testid="chat-composer" anytype={anytypeFor(settings.anytype, agent)} meter={meter} />
       </div>
       {handoff && (
         <HandoffDialog
@@ -318,10 +409,17 @@ const EmptySpace = ({ agent, onNewChat }) => {
 
 const ModelSwitch = ({ agent }) => {
   const settings = useSettings();
-  const { upsertAgent } = useActions();
+  const { convId } = useParams();
+  const conversations = useConversations();
+  const { upsertAgent, addMessage } = useActions();
   const models = modelOptions(settings, [agent.model]);
   return (
-    <Select value={agent.model} onValueChange={(v) => upsertAgent({ ...agent, model: v })}>
+    <Select value={agent.model} onValueChange={(v) => {
+      upsertAgent({ ...agent, model: v });
+      if (convId && conversations.some((c) => c.id === convId)) {
+        addMessage(convId, { role: "event", text: `Model switched to ${v}` });
+      }
+    }}>
       <SelectTrigger className="flex h-8 w-auto max-w-[128px] gap-2 rounded-full border-[color:var(--line)] bg-transparent px-3 font-mono text-[11px] text-dim sm:max-w-none" data-testid="space-model-select" aria-label="Model"><SelectValue /></SelectTrigger>
       <SelectContent className="glass-menu max-h-72">
         {models.map((m) => <SelectItem key={m} value={m} className="font-mono text-xs">{m}</SelectItem>)}
@@ -378,12 +476,12 @@ export default function AgentSpace() {
         <button onClick={() => setSettings({ chatPanel: !panelOpen })} data-click className="btn-icon h-9 w-9 shrink-0 text-dim hover:text-fg md:hidden" data-testid="toggle-chat-panel-mobile" title="Chat list" aria-label="Chat list">
           {panelOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
         </button>
-        <div ref={planetRef} className="p-3" data-testid="space-planet">
+        <div ref={planetRef} className="origin-left scale-[0.8] p-1 sm:scale-100 sm:p-3" data-testid="space-planet">
           <AgentAvatar agent={agent} size={56} pulse={running} gemPulse={fx.pulse.length ? fx.pulse : null} impact={fx.impact} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-mono text-[10px] uppercase tracking-[0.25em]" style={{ color: agent.color }}>{agent.role}</div>
-          <div className="font-display text-2xl font-semibold tracking-tight text-fg" data-testid="space-agent-name">{agent.name}</div>
+          <div className="font-display text-xl font-semibold tracking-tight text-fg sm:text-2xl" data-testid="space-agent-name">{agent.name}</div>
           <div className="flex items-center gap-2 truncate text-xs text-dim" data-testid="agent-status">
             <span className={`h-1.5 w-1.5 rounded-full ${running ? "status-live" : ""}`} style={{ background: agent.color }} />
             {running ? "thinking…" : agent.status || "ready"}

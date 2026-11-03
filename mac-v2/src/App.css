@@ -502,3 +502,74 @@
   .galaxy-path, .galaxy-world, .galaxy-live-dot, .galaxy-stars i, .galaxy-sun-aura { animation: none !important; }
   .galaxy-path { transform: rotate(var(--phase)); }
 }
+
+/* ================= UI batch: code, focus, motion, density, touch =========== */
+
+/* Syntax highlighting (sugar-high token vars) */
+:root {
+  --sh-identifier: #0e7490; --sh-keyword: #7c3aed; --sh-string: #15803d;
+  --sh-class: #b45309; --sh-property: #0369a1; --sh-entity: #be123c;
+  --sh-jsxliterals: #7c3aed; --sh-sign: #64748b; --sh-comment: #94a3b8;
+}
+.dark {
+  --sh-identifier: #d6deeb; --sh-keyword: #c792ea; --sh-string: #addb67;
+  --sh-class: #ffcb8b; --sh-property: #7fdbca; --sh-entity: #f78c6c;
+  --sh-jsxliterals: #c792ea; --sh-sign: #89a4c7; --sh-comment: #697098;
+}
+.sh__line { display: block; }
+
+.codeblock { margin: 0.7em 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--sunk); }
+.codeblock pre { margin: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; }
+.codeblock-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 14px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.codeblock-lang { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--fg-dim); }
+.codeblock-copy { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--fg-dim); border-radius: 8px; padding: 4px 8px; transition: color .15s ease, background-color .15s ease; }
+.codeblock-copy:hover { color: var(--fg); background: var(--hover); }
+
+/* Visible keyboard focus on interactive elements */
+button:focus-visible, a:focus-visible, select:focus-visible, [role="switch"]:focus-visible, [role="option"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Reduced motion: freeze ambient animation, keep state changes instant */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
+}
+
+/* Compact density */
+.density-compact .reply { font-size: 14px; line-height: 1.55; }
+.density-compact .chat-msgs { row-gap: 0; }
+.density-compact .chat-msgs > * + * { margin-top: 1.1rem !important; }
+
+/* Composer safe-area (notched phones) */
+.composer-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+@media (min-width: 640px) {
+  .composer-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+}
+
+/* Message actions: real hit targets, roomier on touch */
+.msg-act { min-width: 28px; min-height: 28px; display: inline-grid; place-items: center; border-radius: 8px; }
+@media (pointer: coarse) {
+  .msg-act { min-width: 38px; min-height: 38px; }
+}
+
+/* Clamped long replies */
+.clamp-fade { position: relative; }
+.clamp-fade.clamped > .md { max-height: 320px; overflow: hidden; }
+.clamp-fade.clamped::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 90px;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--glass-bg) 82%, transparent));
+  pointer-events: none;
+}
+
+/* Home hero aurora */
+.home-aurora { position: absolute; inset: -40px -20px auto -20px; height: 340px; overflow: hidden; pointer-events: none; }
+.home-aurora i { position: absolute; border-radius: 9999px; filter: blur(60px); opacity: 0.5; }
+.home-aurora i:nth-child(1) { width: 320px; height: 320px; left: -60px; top: -80px; background: radial-gradient(circle, var(--accent) 0%, transparent 70%); opacity: 0.28; }
+.home-aurora i:nth-child(2) { width: 280px; height: 280px; right: -40px; top: -40px; background: radial-gradient(circle, #a78bfa 0%, transparent 70%); opacity: 0.25; }
+.quickask-glow:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), 0 18px 50px -20px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* Static small planet dot (perf: replaces the full orb under 28px) */
+.orb-dot { border-radius: 9999px; box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--glow, var(--accent)) 55%, transparent), inset 0 1px 2px rgba(255,255,255,.5); flex-shrink: 0; }
