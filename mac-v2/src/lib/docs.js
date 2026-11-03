@@ -14,6 +14,55 @@ export const DOC_MAX_FILES = 8;
 export const DOC_MAX_BYTES = 20 * 1024 * 1024; // 20 MB, before parsing
 const MAX_PDF_PAGES = 250;
 
+// Images ride along as vision input (OpenAI image_url parts), not text. They
+// are downscaled client-side so a phone photo doesn't bloat storage or billing.
+const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+const IMAGE_MAX_DIM = 1536;
+export const IMAGE_MAX_DATAURL = 1_500_000; // chars, after downscaling
+
+const loadViaTag = (file) =>
+  new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("decode"));
+    };
+    img.src = url;
+  });
+
+const loadBitmap = (file) => {
+  if (typeof createImageBitmap === "function") return createImageBitmap(file).catch(() => loadViaTag(file));
+  return loadViaTag(file);
+};
+
+const readImage = async (file) => {
+  let src;
+  try {
+    src = await loadBitmap(file);
+  } catch {
+    fail(`“${file.name}” couldn't be decoded as an image.`);
+  }
+  const w = src.width || src.naturalWidth || 0;
+  const h = src.height || src.naturalHeight || 0;
+  if (!w || !h) fail(`“${file.name}” couldn't be decoded as an image.`);
+  const scale = Math.min(1, IMAGE_MAX_DIM / Math.max(w, h));
+  const cw = Math.max(1, Math.round(w * scale));
+  const ch = Math.max(1, Math.round(h * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = cw;
+  canvas.height = ch;
+  canvas.getContext("2d").drawImage(src, 0, 0, cw, ch);
+  src.close?.();
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  if (dataUrl.length > IMAGE_MAX_DATAURL) fail(`“${file.name}” is still too large after shrinking — try a smaller image.`);
+  return { dataUrl, width: cw, height: ch };
+};
+
 // Plain-text formats we can hand to the model as-is.
 const TEXT_EXT = new Set([
   "txt", "text", "md", "markdown", "mdx", "csv", "tsv", "json", "jsonl", "ndjson",
@@ -159,6 +208,12 @@ export const readDoc = async (file) => {
   }
 
   const ext = extOf(file.name);
+  const mime = String(file.type || "");
+  if (ext === "svg" || mime.includes("svg")) fail("SVG files aren't supported — export it as PNG and attach that.");
+  if (IMAGE_EXT.has(ext) || mime.startsWith("image/")) {
+    const img = await readImage(file);
+    return { id: uid(), name: file.name, kind: "image", bytes: file.size, text: "", chars: 0, truncated: false, dataUrl: img.dataUrl, width: img.width, height: img.height };
+  }
   let text = "";
   let kind = ext || "text";
 
@@ -207,6 +262,7 @@ export const docForMessage = (d) => ({
   chars: d.chars,
   text: d.text,
   ...(d.truncated ? { truncated: true } : {}),
+  ...(d.dataUrl ? { dataUrl: d.dataUrl, width: d.width, height: d.height } : {}),
 });
 
 export const docSummary = (d) => `${d.name} (${d.kind || "doc"}, ${d.chars.toLocaleString()} chars)`;

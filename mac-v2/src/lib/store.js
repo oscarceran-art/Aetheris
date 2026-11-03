@@ -15,17 +15,24 @@ const DirectoryCtx = createContext(null); // agents + gems
 const ConvosCtx = createContext(null); // conversations
 const DeviceCtx = createContext(null);
 const StorageCtx = createContext(null);
+const PresenceCtx = createContext(null); // ephemeral: which agent is generating (never persisted)
 const ApiCtx = createContext(null);
 
 // Optional Anytype key from .env (VITE_ANYTYPE_API_KEY) — same treatment as the
 // OpenAI key: a default for a fresh install, never hardcoded.
 const ENV_ANYTYPE_KEY = import.meta.env?.VITE_ANYTYPE_API_KEY || "";
 
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
 const defaults = () => ({
   agents: DEFAULT_AGENTS.map((a) => ({ ...a, templates: DEFAULT_TEMPLATES[a.id] || [] })),
   conversations: [],
   gems: DEFAULT_GEMS,
-  settings: { apiKey: import.meta.env?.VITE_OPENAI_API_KEY || "", theme: "dark", models: DEFAULT_MODELS, customModels: [], onboarded: false, sidebar: "open", chatPanel: true, focus: false, lastChat: {}, wps: 10, instant: false, sound: { muted: false, volume: 0.4 }, context: { mode: "messages", maxMessages: 40, maxTokens: 16000, overflow: "summarize" }, web: { enabled: true }, anytype: { enabled: !!ENV_ANYTYPE_KEY, apiKey: ENV_ANYTYPE_KEY, spaceId: "", spaceName: "", spaceExplicit: false, write: true, base: "/anytype" } },
+  gemStats: {},
+  settings: { apiKey: import.meta.env?.VITE_OPENAI_API_KEY || "", theme: "dark", models: DEFAULT_MODELS, customModels: [], onboarded: false, sidebar: "open", chatPanel: true, focus: false, lastChat: {}, wps: 10, instant: false, reduceMotion: prefersReducedMotion(), accentHue: null, density: "comfortable", sound: { muted: false, volume: 0.4 }, context: { mode: "messages", maxMessages: 40, maxTokens: 16000, overflow: "summarize" }, web: { enabled: true }, anytype: { enabled: !!ENV_ANYTYPE_KEY, apiKey: ENV_ANYTYPE_KEY, spaceId: "", spaceName: "", spaceExplicit: false, write: true, base: "/anytype" } },
 });
 
 // v1 force-reset every agent onto one of two hardcoded models. v2 keeps
@@ -44,11 +51,15 @@ export const migrate = (s) => {
     })),
     conversations: (src.conversations || []).filter((c) => c.type === "chat"),
     gems: src.gems || d.gems,
+    gemStats: src.gemStats && typeof src.gemStats === "object" ? src.gemStats : {},
     settings: {
       ...d.settings,
       ...src.settings,
       models: Array.isArray(src.settings?.models) && src.settings.models.length ? [...new Set(src.settings.models)] : DEFAULT_MODELS,
       customModels: Array.isArray(src.settings?.customModels) ? [...new Set(src.settings.customModels)] : [],
+      reduceMotion: src.settings?.reduceMotion ?? d.settings.reduceMotion,
+      accentHue: typeof src.settings?.accentHue === "number" ? src.settings.accentHue : null,
+      density: src.settings?.density === "compact" ? "compact" : "comfortable",
       focus: false, // focus mode is gone — the ⛶ button is plain browser full screen now
       sound: { ...d.settings.sound, ...src.settings?.sound },
       context: { ...d.settings.context, ...src.settings?.context },
@@ -81,6 +92,8 @@ export function StoreProvider({ children }) {
   const [state, setState] = useState(loadCache);
   // storage: which backend holds the data + any persistence failure to surface.
   const [storage, setStorage] = useState({ backend: idb.idbSupported() ? "indexeddb" : "localstorage", ready: false, error: "" });
+  // presence: agentId currently generating (or null). Ephemeral — never saved.
+  const [presence, setPresenceState] = useState(null);
 
   // --- Optional mirror to a real file on disk ----------------------------
   // status: "off" | "on" | "needs-permission" | "error"
@@ -183,6 +196,20 @@ export function StoreProvider({ children }) {
     firstTheme.current = false;
   }, [state.settings.theme]);
 
+  // Display prefs: custom accent hue, density, reduced motion — all plain
+  // document-level switches so they apply without re-rendering anything.
+  useEffect(() => {
+    const root = document.documentElement;
+    const { theme, accentHue, density, reduceMotion } = state.settings;
+    if (typeof accentHue === "number") {
+      root.style.setProperty("--accent", theme === "dark" ? `hsl(${accentHue} 85% 62%)` : `hsl(${accentHue} 75% 42%)`);
+    } else {
+      root.style.removeProperty("--accent");
+    }
+    root.classList.toggle("density-compact", density === "compact");
+    root.classList.toggle("reduce-motion", !!reduceMotion);
+  }, [state.settings.theme, state.settings.accentHue, state.settings.density, state.settings.reduceMotion]);
+
   useEffect(() => {
     configureSound(state.settings.sound);
   }, [state.settings.sound]);
@@ -190,6 +217,7 @@ export function StoreProvider({ children }) {
   const api = useMemo(
     () => ({
       setSettings: (p) => setState((s) => ({ ...s, settings: { ...s.settings, ...p } })),
+      setPresence: (id) => setPresenceState(id || null),
       upsertAgent: (a) => setState((s) => ({ ...s, agents: upsert(s.agents, a) })),
       deleteAgent: (id) =>
         setState((s) => ({
@@ -199,7 +227,23 @@ export function StoreProvider({ children }) {
           conversations: s.conversations.filter((c) => c.agentId !== id),
         })),
       upsertGem: (g) => setState((s) => ({ ...s, gems: upsert(s.gems, g) })),
-      deleteGem: (id) => setState((s) => ({ ...s, gems: s.gems.filter((g) => g.id !== id) })),
+      deleteGem: (id) =>
+        setState((s) => {
+          const { [id]: _drop, ...rest } = s.gemStats || {};
+          return { ...s, gems: s.gems.filter((g) => g.id !== id), gemStats: rest };
+        }),
+      recordGemUse: (ids = []) => {
+        if (!ids.length) return;
+        const at = Date.now();
+        setState((s) => {
+          const gemStats = { ...(s.gemStats || {}) };
+          for (const id of ids) {
+            const prev = gemStats[id] || { count: 0, lastUsed: 0 };
+            gemStats[id] = { count: prev.count + 1, lastUsed: at };
+          }
+          return { ...s, gemStats };
+        });
+      },
       createConversation: (c) => {
         const conv = { id: uid(), messages: [], createdAt: Date.now(), updatedAt: Date.now(), ...c };
         setState((s) => ({ ...s, conversations: [conv, ...s.conversations] }));
@@ -289,7 +333,7 @@ export function StoreProvider({ children }) {
     []
   );
 
-  const directory = useMemo(() => ({ agents: state.agents, gems: state.gems }), [state.agents, state.gems]);
+  const directory = useMemo(() => ({ agents: state.agents, gems: state.gems, gemStats: state.gemStats || {} }), [state.agents, state.gems, state.gemStats]);
 
   return createElement(
     SettingsCtx.Provider,
@@ -306,7 +350,7 @@ export function StoreProvider({ children }) {
           createElement(
             StorageCtx.Provider,
             { value: storage },
-            createElement(ApiCtx.Provider, { value: api }, children)
+            createElement(PresenceCtx.Provider, { value: presence }, createElement(ApiCtx.Provider, { value: api }, children))
           )
         )
       )
@@ -320,6 +364,7 @@ export const useDirectory = () => useContext(DirectoryCtx);
 export const useConversations = () => useContext(ConvosCtx);
 export const useDevice = () => useContext(DeviceCtx);
 export const useStorage = () => useContext(StorageCtx);
+export const usePresence = () => useContext(PresenceCtx);
 export const useActions = () => useContext(ApiCtx);
 
 // Back-compat: same shape as v1 ({ state, device, ...api }). Re-renders on any
@@ -330,9 +375,10 @@ export const useStore = () => {
   const conversations = useContext(ConvosCtx);
   const device = useContext(DeviceCtx);
   const storage = useContext(StorageCtx);
+  const presence = useContext(PresenceCtx);
   const api = useContext(ApiCtx);
   return useMemo(
-    () => ({ state: { settings, agents: directory.agents, gems: directory.gems, conversations }, device, storage, ...api }),
-    [settings, directory, conversations, device, storage, api]
+    () => ({ state: { settings, agents: directory.agents, gems: directory.gems, gemStats: directory.gemStats, conversations }, device, storage, presence, ...api }),
+    [settings, directory, conversations, device, storage, presence, api]
   );
 };

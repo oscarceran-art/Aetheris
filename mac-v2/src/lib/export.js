@@ -24,7 +24,7 @@ export const chatToMarkdown = (conv, agent = {}) => {
     const tags = [...(m.gems || []).map((g) => `/${g.trigger}`)];
     lines.push(`**${who}**${tags.length ? ` ${tags.join(" ")}` : ""}`, "");
     for (const d of m.docs || []) {
-      lines.push(`> 📎 ${d.name} (${d.kind || "doc"}${d.truncated ? ", truncated" : ""})`);
+      lines.push(d.kind === "image" ? `> 🖼 ${d.name} (image)` : `> 📎 ${d.name} (${d.kind || "doc"}${d.truncated ? ", truncated" : ""})`);
     }
     for (const n of m.notes || []) {
       lines.push(`> 📝 Anytype note "${n.name}"${n.truncated ? " (truncated)" : ""}`);

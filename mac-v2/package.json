@@ -28,6 +28,7 @@
     "react-router-dom": "^6.28.1",
     "remark-gfm": "^4.0.0",
     "sonner": "^1.7.4",
+    "sugar-high": "^2.6.4",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {

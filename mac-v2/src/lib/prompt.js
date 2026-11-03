@@ -10,7 +10,9 @@
 export const ATTACH_BUDGET_CHARS = 24000;
 
 const docBlock = (d) =>
-  `Attached document — "${d.name}" (${d.kind || "doc"}):\n${d.text}${d.truncated ? "\n(document truncated)" : ""}`;
+  d.kind === "image"
+    ? `[Attached image "${d.name}"${d.width ? ` (${d.width}×${d.height})` : ""} — the image itself is shown to the model alongside this message]`
+    : `Attached document — "${d.name}" (${d.kind || "doc"}):\n${d.text}${d.truncated ? "\n(document truncated)" : ""}`;
 
 const noteBlock = (n) =>
   `From my Anytype notes — "${n.name}":\n${n.markdown}${n.truncated ? "\n(note truncated)" : ""}`;

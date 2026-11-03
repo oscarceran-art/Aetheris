@@ -32,4 +32,12 @@ describe("migrate", () => {
     const out = migrate(null);
     expect(out.agents.length).toBeGreaterThan(0);
   });
+  it("defaults display prefs and preserves them", () => {
+    expect(migrate(null).settings.accentHue).toBeNull();
+    expect(migrate(null).settings.density).toBe("comfortable");
+    const out = migrate({ agents: [], conversations: [], gems: [], settings: { accentHue: 180, density: "compact", reduceMotion: true } });
+    expect(out.settings.accentHue).toBe(180);
+    expect(out.settings.density).toBe("compact");
+    expect(out.settings.reduceMotion).toBe(true);
+  });
 });

@@ -61,6 +61,11 @@ export default function GalaxyPage() {
     nav(`/agent/${agent.id}/chat/${conversation.id}`);
   };
 
+  const recentChats = useMemo(() => [...conversations]
+    .filter((c) => c.messages?.length && agents.some((a) => a.id === c.agentId))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 12), [conversations, agents]);
+
   const newestAgent = [...agentData].sort((a, b) => (b.chats[0]?.updatedAt || 0) - (a.chats[0]?.updatedAt || 0))[0]?.agent;
 
   return (
@@ -169,6 +174,33 @@ export default function GalaxyPage() {
               No gems in orbit yet. Throw one into any chat and it’ll show up here, beside its planet.
             </div>
           )}
+          <section className="glass-card rounded-[28px] p-6 sm:p-8" data-testid="galaxy-timeline">
+            <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-accent">Transmissions</div>
+            <h2 className="mt-1 font-display text-xl font-semibold text-fg">Latest conversations</h2>
+            {recentChats.length === 0 ? (
+              <p className="mt-3 text-sm text-dim">No conversations yet — beam one up from any planet.</p>
+            ) : (
+              <ol className="relative mt-5 space-y-5 border-l border-[color:var(--line)] pl-5">
+                {recentChats.map((c) => {
+                  const a = agents.find((x) => x.id === c.agentId);
+                  const last = [...(c.messages || [])].reverse().find((m) => (m.role === "user" || m.role === "assistant") && m.content);
+                  return (
+                    <li key={c.id} className="relative">
+                      <span className="absolute -left-[27px] top-1 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--bg)]" style={{ background: a?.color || "var(--accent)" }} aria-hidden />
+                      <button data-click onClick={() => nav(`/agent/${c.agentId}/chat/${c.id}`)} className="block w-full text-left" data-testid={`timeline-${c.id}`}>
+                        <span className="flex items-baseline justify-between gap-3">
+                          <span className="truncate text-sm font-medium text-fg">{c.title || "Untitled"}</span>
+                          <span className="shrink-0 font-mono text-[10px] text-dim">{c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}</span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-dim">{a ? `with ${a.name} · ` : ""}{last ? last.content.slice(0, 90) : "—"}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </section>
+
           <p className="mt-3 text-center text-[11px] text-dim">Your original Home is still right where it was in the sidebar.</p>
         </section>
       </div>
