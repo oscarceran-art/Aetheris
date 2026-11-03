@@ -10,3 +10,10 @@
 ## macOS
 
 See [`mac/README.md`](mac/README.md) for requirements, setup, and app documentation.
+
+## mac-v2 (improved build, in progress)
+
+[`mac-v2/`](mac-v2/) is a copy of the macOS app where the v0.9 improvement batch is being built
+(tests, split store, IndexedDB persistence, model picker, agent handoffs, onboarding, …).
+It runs side-by-side with `mac/` on port 5174 with its own storage. The original `mac/` folder is
+untouched. See [`mac-v2/README.md`](mac-v2/README.md).

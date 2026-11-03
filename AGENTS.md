@@ -4,8 +4,9 @@ This repository contains two separate builds of Aetheris:
 
 | Path | Platform | Status |
 | --- | --- | --- |
-| `mac/` | macOS | **Active — the maintained build** |
-| repository root | Windows |
+| `mac/` | macOS | **Active — the maintained v0.8 build (do not modify for the v2 batch)** |
+| `mac-v2/` | macOS | **v0.9 improvement batch — the working copy (all new changes go here)** |
+| repository root | Windows | Discontinued — removed |
 
 
 ## Working in `mac/`
